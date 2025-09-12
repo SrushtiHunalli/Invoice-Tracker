@@ -1,0 +1,19 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "invoice-tracker-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/invoiceTracker/InvoiceTrackerWebPart.js",
+          "manifest": "./src/webparts/invoiceTracker/InvoiceTrackerWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "InvoiceTrackerWebPartStrings": "lib/webparts/invoiceTracker/loc/{locale}.js",
+    "PropertyControlStrings": "node_modules/@pnp/spfx-property-controls/lib/loc/{locale}.js"
+  }
+}

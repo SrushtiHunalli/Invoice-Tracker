@@ -1,0 +1,18 @@
+:global #workbenchPageContent {
+  max-width: 100% !important;
+}
+.commonTable{
+    .btnStyle{
+        text-align: right;
+    }
+
+    .emptyList{
+        text-align: center;
+        font-weight: bold;
+        font-size: medium;
+    }
+
+    .topSpace{
+        margin-top: 1%;;
+    }
+}

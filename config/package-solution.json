@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "invoice-tracker-client-side-solution",
+    "id": "46d606ae-26a5-4937-bc18-7007fdc54261",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.16.1"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "InvoiceTracker description"
+      },
+      "longDescription": {
+        "default": "InvoiceTracker description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "invoice-tracker Feature",
+        "description": "The feature that activates elements of the invoice-tracker solution.",
+        "id": "e8c03b67-c02e-45c2-82a8-8529bf21677b",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/invoice-tracker.sppkg"
+  }
+}
