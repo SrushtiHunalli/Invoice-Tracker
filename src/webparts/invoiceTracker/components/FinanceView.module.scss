@@ -1,3 +1,23 @@
+.compact-panel {
+  font-size: 13px;
+  line-height: 1.2;
+}
+.compact-panel .ms-TextField,
+.compact-panel .ms-Dropdown,
+.compact-panel .ms-DatePicker {
+  font-size: 12px;
+  min-height: 26px;
+  padding: 3px 8px;
+}
+.compact-panel .ms-Label {
+  font-size: 13px;
+}
+.compact-panel .ms-PrimaryButton {
+  font-size: 13px;
+  min-height: 28px;
+  padding: 0 16px;
+}
+
 .rootContainer {
   display: flex;
   flex-direction: column;

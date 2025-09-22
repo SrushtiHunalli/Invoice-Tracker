@@ -19,9 +19,23 @@ import {
   DialogType,
   DialogFooter,
   Label,
+  DatePicker,
+  IconButton,
+  IDetailsHeaderProps,
+  DetailsListLayoutMode,
+  IRenderFunction,
+  Sticky,
+  StickyPositionType,
+  ScrollablePane,
+  ContextualMenu,
+  ContextualMenuItemType
 } from "@fluentui/react";
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { SPFI } from "@pnp/sp";
 import DocumentViewer from "../components/DocumentViewer";
+import styles from './FinanceView.module.scss';
+// import { columnSort, SortType } from './SortingUtils';
 // import { update } from "@microsoft/sp-lodash-subset";
 interface FinanceViewProps {
   sp: SPFI;
@@ -32,37 +46,21 @@ interface FinanceViewProps {
     customer?: string;
     Status?: string;
     FinanceStatus?: string;
+    CurrentStatus?: string;
   };
   onNavigate: (pageKey: string, params?: any) => void;
   projectsp: SPFI;
 }
 
 // STATUS OPTIONS (STEP LABELS)
-const statusOptions: IDropdownOption[] = [
+const InvstatusOptions: IDropdownOption[] = [
   // { key: "Request Draft", text: "Request Draft" },
   { key: "Not Generated", text: "Not Generated" },
+  { key: "Invoice Raised", text: "Invoice Raised" },
   { key: "Pending Payment", text: "Pending Payment" },
   { key: "Payment Received", text: "Payment Received" },
+  { key: "Cancelled", text: "Cancelled" }
 ];
-
-// async function ensureFolder(sp: SPFI, parentFolderPath: string, folderName: string): Promise<string> {
-//   const fullPath = `${parentFolderPath}/${folderName}`;
-//   try {
-//     const folderInfo = await sp.web.getFolderByServerRelativePath(fullPath).select("Exists", "ServerRelativeUrl")();
-//     if (folderInfo.Exists) {
-//       console.log(`Folder exists: ${fullPath}`);
-//       return fullPath;
-//     } else {
-//       const newFolder = await sp.web.getFolderByServerRelativePath(parentFolderPath).addSubFolderUsingPath(folderName);
-//       const newFolderInfo = await newFolder.select("ServerRelativeUrl")();
-//       console.log(`Folder created: ${newFolderInfo.ServerRelativeUrl}`);
-//       return newFolderInfo.ServerRelativeUrl;
-//     }
-//   } catch (error) {
-//     console.error("Error checking/creating folder:", fullPath, error);
-//     throw error;
-//   }
-// }
 
 export default function FinanceView({ sp, projectsp, context, initialFilters, onNavigate }: FinanceViewProps) {
   const [items, setItems] = useState<any[]>([]);
@@ -80,23 +78,31 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   const [dialogMessage, setDialogMessage] = useState("");
   const [dialogType, setDialogType] = useState<"success" | "error">("success");
   const [isDragActive, setIsDragActive] = useState(false);
+  const [, setCustomerOptions] = useState<IDropdownOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<IDropdownOption[]>([]);
+  const [currentstatusOptions, setcurrentstatusOptions] = useState<IDropdownOption[]>([]);
+  // const [filterCurrentStatus, setFilterCurrentStatus] = useState<string | undefined>(undefined);
+  // const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  // const [filteringColumnKey, setFilteringColumnKey] = useState<string | null>(null);
 
+  const [columnFilterMenu, setColumnFilterMenu] = useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({
+    visible: false,
+    target: null,
+    columnKey: null,
+  });
+  const onColumnHeaderClick = (ev?: React.MouseEvent<HTMLElement>, column?: IColumn) => {
+    if (column && ev) {
+      setColumnFilterMenu({ visible: true, target: ev.currentTarget, columnKey: column.key });
+    }
+  };
   const [filters, setFilters] = useState({
     search: initialFilters?.search || "",
     requestedDate: initialFilters?.requestedDate || null,
     customer: initialFilters?.customer || "",
     status: initialFilters?.Status || "",
     financeStatus: initialFilters?.FinanceStatus || "",
+    currentstatus: initialFilters?.CurrentStatus || "",
   });
-
-  const financeStatusOptions: IDropdownOption[] = [
-    { key: "Submitted", text: "Submitted" },
-    { key: "Pending", text: "Pending" },
-    { key: "Clarification", text: "Clarification" },
-    { key: "Paid", text: "Paid" },
-  ];
-
-  const [, setCustomerOptions] = useState<IDropdownOption[]>([]);
 
   // Edit form fields and attachments
   const [editFields, setEditFields] = useState<any>({});
@@ -114,13 +120,72 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         console.log("Selection changed, selected item:", sel);
         if (sel) {
           setSelectedItem(sel);
-          openEditForm(sel);
+          if (openEditForm) openEditForm(sel);
+        } else {
+          setSelectedItem(null);
+          // if (closeEditForm) closeEditForm();
         }
       }
     })
   );
 
+
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+
+const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
+  const sortedItems = [...items].sort((a, b) => {
+    let aVal = (a as any)[columnKey];
+    let bVal = (b as any)[columnKey];
+
+    // Handle null/undefined
+    if (aVal == null && bVal == null) return 0;
+    if (aVal == null) return 1;
+    if (bVal == null) return -1;
+
+    // Handle Date objects
+    if (aVal instanceof Date) aVal = aVal.getTime();
+    if (bVal instanceof Date) bVal = bVal.getTime();
+
+    // Number comparison (after Date conversion)
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return direction === 'asc' ? aVal - bVal : bVal - aVal;
+    }
+
+    // Try parsing as date strings if not a number
+    const aAsDate = Date.parse(aVal);
+    const bAsDate = Date.parse(bVal);
+    if (!isNaN(aAsDate) && !isNaN(bAsDate)) {
+      return direction === 'asc' ? aAsDate - bAsDate : bAsDate - aAsDate;
+    }
+
+    // Default to string comparison
+    const aStr = aVal.toString();
+    const bStr = bVal.toString();
+    return direction === 'asc'
+      ? aStr.localeCompare(bStr)
+      : bStr.localeCompare(aStr);
+  });
+
+  setItems(sortedItems);
+  setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+};
+  const menuItems = [
+    { key: 'asc', text: 'Sort Asc to Desc', iconProps: { iconName: 'SortUp' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc') },
+    { key: 'desc', text: 'Sort Desc to Asc', iconProps: { iconName: 'SortDown' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc') },
+    { key: 'divider', itemType: ContextualMenuItemType.Divider },
+    // { key: 'filter', text: 'Filter...', iconProps: { iconName: 'Filter' }, onClick: () => openFilterPanelFromMenu() },
+    // { key: 'clear', text: 'Clear Filter', iconProps: { iconName: 'ClearFilter' }, onClick: () => clearColumnFilter(columnFilterMenu.columnKey!) },
+  ];
+
+  // const clearColumnFilter = (columnKey: string) => {
+  //   setFilters((prev) => ({ ...prev, [columnKey]: undefined }));
+  //   setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+  // };
+  // const openFilterPanelFromMenu = () => {
+  //   setIsFilterPanelOpen(true);
+  //   setFilteringColumnKey(columnFilterMenu.columnKey);
+  //   setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+  // };
 
   async function fetchData() {
     setLoading(true);
@@ -141,32 +206,60 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         "FinanceStatus",
         "PMCommentsHistory",
         "FinanceCommentsHistory",
-        "InvoiceNumber"
+        "InvoiceNumber",
+        "CurrentStatus",
+        "Modified",
+        "Created",
+        "Author/Title",
+        "Editor/Title",
+        "DueDate",
+        "Currency",
       ];
+      const calculateWidth = (header: string) => Math.max(80, Math.min(header.length * 15, 300));
       const cols: IColumn[] = [
-        { key: "PurchaseOrder", name: "Purchase Order", fieldName: "PurchaseOrder", minWidth: 80, maxWidth: 130 },
-        { key: "ProjectName", name: "Project Name", fieldName: "ProjectName", minWidth: 120, maxWidth: 170 },
+        { key: "PurchaseOrder", name: "Purchase Order", fieldName: "PurchaseOrder", minWidth: 80, maxWidth: 130, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "ProjectName", name: "Project Name", fieldName: "ProjectName", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
         {
-          key: "Finance Status",
+          key: "CurrentStatus",
           name: "Current Status",
-          fieldName: "FinanceStatus",
+          fieldName: "CurrentStatus",
           minWidth: 150,
-          maxWidth: 200,
-          onRender: (item) => item.FinanceStatus || "-"
+          maxWidth: 200, isResizable: true,
+          onRender: (item) => item.CurrentStatus || "-",
+          onColumnClick: onColumnHeaderClick,
         },
-        { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 150, maxWidth: 200 },
-        { key: "Comments", name: "PM Comments", fieldName: "Comments", minWidth: 160, maxWidth: 300 },
-        { key: "POItem_x0020_Title", name: "PO Item Title", fieldName: "POItem_x0020_Title", minWidth: 120, maxWidth: 170 },
-        { key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140 },
-        { key: "InvoiceAmount", name: "Invoice Amount", fieldName: "InvoiceAmount", minWidth: 100, maxWidth: 140 },
-        { key: "Customer_x0020_Contact", name: "Customer Contact", fieldName: "Customer_x0020_Contact", minWidth: 120, maxWidth: 170 },
-      ]; // your columns setup
+        { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "DueDate", name: "DueDate", fieldName: "DueDate", minWidth: 150, maxWidth: 200, isResizable: true, onRender: item => item.DueDate ? new Date(item.DueDate).toLocaleDateString() : "-", onColumnClick: onColumnHeaderClick, },
+        { key: "Comments", name: "PM Comments", fieldName: "Comments", minWidth: 160, maxWidth: 300, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "POItem_x0020_Title", name: "PO Item Title", fieldName: "POItem_x0020_Title", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "InvoiceAmount", name: "Invoiced Amount", fieldName: "InvoiceAmount", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "Customer_x0020_Contact", name: "Customer Contact", fieldName: "Customer_x0020_Contact", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        {
+          key: "Created", name: "Created", fieldName: "Created", minWidth: calculateWidth("Created"), maxWidth: 300, isResizable: true, onRender: item => new Date(item.Created).toLocaleDateString(), onColumnClick: onColumnHeaderClick,
+        },
+        {
+          key: "CreatedBy", name: "Created By", fieldName: "Author", minWidth: calculateWidth("Created By"), maxWidth: 300, isResizable: true,
+          onRender: item => item.Author?.Title || "-",
+          onColumnClick: onColumnHeaderClick,
+        },
+        {
+          key: "Modified", name: "Modified", fieldName: "Modified", minWidth: calculateWidth("Modified"), maxWidth: 300, isResizable: true,
+          onRender: item => new Date(item.Modified).toLocaleDateString(),
+          onColumnClick: onColumnHeaderClick,
+        },
+        {
+          key: "ModifiedBy", name: "Modified By", fieldName: "Editor", minWidth: calculateWidth("Modified By"), maxWidth: 300, isResizable: true,
+          onRender: item => item.Editor?.Title || "-",
+          onColumnClick: onColumnHeaderClick,
+        },
+      ];
       setColumns(cols);
-
       const listItems = await sp.web.lists
         .getByTitle("Invoice Requests")
         .items.select(...fieldNames, "AttachmentFiles")
-        .expand("AttachmentFiles")
+        .expand("AttachmentFiles", "Author", "Editor")
         .top(500)();
 
       setItems(listItems);
@@ -193,6 +286,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       }));
     }
   }, [initialFilters]);
+
   const showDialog = (message: string, type: "success" | "error") => {
     setDialogMessage(message);
     setDialogType(type);
@@ -224,8 +318,42 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       customer: "",
       status: "",
       financeStatus: "",
+      currentstatus: "",
     });
   };
+
+  const handleExportToExcel = () => {
+
+    if (!editFields.FinanceComments || editFields.FinanceComments.trim() === "") {
+      setDialogMessage("No available Data to export");
+      setDialogType("error");
+      setDialogVisible(true);
+      return;
+    }
+
+    const exportData = filteredItems.map(item => ({
+      PurchaseOrder: item.PurchaseOrder,
+      ProjectName: item.ProjectName,
+      CurrentStatus: item.CurrentStatus || "-",
+      Status: item.Status,
+      Comments: item.Comments,
+      POItemTitle: item.POItem_x0020_Title,
+      POItemValue: item.POItem_x0020_Value,
+      InvoiceAmount: item.InvoiceAmount,
+      CustomerContact: item.Customer_x0020_Contact,
+      Created: item.Created ? new Date(item.Created).toLocaleDateString() : '',
+      CreatedBy: item.Author?.Title || "-",
+      Modified: item.Modified ? new Date(item.Modified).toLocaleDateString() : '',
+      ModifiedBy: item.Editor?.Title || "-"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'InvoiceRequests');
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `InvoiceRequests_${new Date().toISOString()}.xlsx`);
+  };
+
 
   // Open the panel and select item
   // const closeDocViewer = (item: any) => {
@@ -234,42 +362,58 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   //   setIsPanelOpen(true);
   // };
 
-
-  // const filteredItems = items.filter(item => {
-  //   return (
-  //     (!filters.search ||
-  //       (item.ProjectName || "").toLowerCase().includes(filters.search.toLowerCase()) ||
-  //       (item.PurchaseOrder || "").toLowerCase().includes(filters.search.toLowerCase())) ||
-  //       (item.POItem_x0020_Title || "").toLowerCase().includes(filters.search.toLowerCase()) ||
-  //       (item.POItem_x0020_Value || "").toString().toLowerCase().includes(filters.search.toLowerCase()) ||
-  //       (item.InvoiceAmount || "").toString().toLowerCase().includes(filters.search.toLowerCase()) ||
-  //       (item.Customer_x0020_Contact || "").toLowerCase().includes(filters.search.toLowerCase()) 
-  //       &&
-  //     (!filters.customer || item.Customer === filters.customer) &&
-  //     (!filters.status || item.Status === filters.status) &&
-  //     (!filters.financeStatus || item.FinanceStatus === filters.financeStatus) && // NEW filter
-  //     (!filters.requestedDate || (item.RequestedDate && new Date(item.RequestedDate).toLocaleDateString() === filters.requestedDate.toLocaleDateString()))
-  //   );
-  // });
-
-  const filteredItems = items.filter(item => {
+  const filteredItems = React.useMemo(() => {
     const searchText = filters.search?.toLowerCase() || "";
 
-    const matchesSearch =
-      !searchText ||
-      columns.some(col => {
-        const fieldValue = item[col.fieldName] ?? "";
-        return fieldValue.toString().toLowerCase().includes(searchText);
-      });
+    return items.filter(item => {
+      const matchesSearch =
+        !searchText ||
+        columns.some(col => {
+          const fieldValue = item[col.fieldName] ?? "";
+          return fieldValue.toString().toLowerCase().includes(searchText);
+        });
 
+      return (
+        matchesSearch &&
+        (!filters.customer || item.Customer === filters.customer) &&
+        (!filters.status || item.Status === filters.status) &&
+        (!filters.financeStatus || item.FinanceStatus === filters.financeStatus) &&
+        (!filters.currentstatus || item.CurrentStatus === filters.currentstatus) &&
+        (!filters.requestedDate || (item.RequestedDate && new Date(item.RequestedDate).toLocaleDateString() === filters.requestedDate.toLocaleDateString()))
+      );
+    });
+  }, [items, columns, filters]);
+
+
+  useEffect(() => {
+    setCustomerOptions(getUniqueOptions(filteredItems, "Customer"));
+    setStatusOptions(getUniqueOptions(filteredItems, "Status"));
+    setcurrentstatusOptions(getUniqueOptions(filteredItems, "CurrentStatus"));
+  }, [filteredItems]);
+
+  const onRenderDetailsHeader: IRenderFunction<IDetailsHeaderProps> = (props, defaultRender) => {
+    if (!props) {
+      return null;
+    }
     return (
-      matchesSearch &&
-      (!filters.customer || item.Customer === filters.customer) &&
-      (!filters.status || item.Status === filters.status) &&
-      (!filters.financeStatus || item.FinanceStatus === filters.financeStatus) &&
-      (!filters.requestedDate || (item.RequestedDate && new Date(item.RequestedDate).toLocaleDateString() === filters.requestedDate.toLocaleDateString()))
+      <Sticky stickyPosition={StickyPositionType.Header}>
+        {defaultRender!({ ...props })}
+      </Sticky>
     );
-  });
+  };
+
+  function getUniqueOptions(data: any[], field: string): IDropdownOption[] {
+    const uniqueVals = Array.from(
+      new Set(
+        data
+          .map(item => item[field])
+          .filter(v => v !== null && v !== undefined && v !== "")
+          .map(v => v.toString())
+      )
+    );
+
+    return uniqueVals.map(val => ({ key: val, text: val }));
+  }
 
   // Handle fields change
   function handleFieldChange(field: string, value: any) {
@@ -394,7 +538,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     // Determine the invoice status to use in the form:
     const normalizedStatus = (item.Status || "").trim();
     const defaultStatusForSubmitted = "Not Generated";
-    const submittedStates = ["Submitted"];
+    const submittedStates = ["Request Submitted"];
 
     const statusToUse = submittedStates.includes(normalizedStatus)
       ? defaultStatusForSubmitted
@@ -404,7 +548,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       Status: statusToUse,
       FinanceComments: item.FinanceComments ?? "",
       InvoiceNumber: item.InvoiceNumber || "",
-      FinanceStatus: "Submitted",
+      FinanceStatus: "Request Submitted",
+      CurrentStatus: "",
+      DueDate: item.DueDate || '',
     });
 
     setOriginalStatus(item.Status ?? null);
@@ -417,7 +563,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     if (!selectedItem) return;
 
     if (!editFields.FinanceComments || editFields.FinanceComments.trim() === "") {
-      alert("Please enter finance comments before submitting clarification.");
+      setDialogMessage("Comments have to be entered in the Finance Comments field.");
+      setDialogType("error");
+      setDialogVisible(true);
       return;
     }
     // const userRole = await getCurrentUserRole(context, selectedItem);
@@ -446,6 +594,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         FinanceStatus: "Clarification",
         PMStatus: "Pending",
         FinanceComments: editFields.FinanceComments.trim(),
+        CurrentStatus: "Finance asked Clarification",
       });
 
       // Reload updated item data to refresh UI
@@ -467,6 +616,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   // };
 
   // Save updated invoice request and upload finance attachments
+
   async function handleSave() {
     if (!selectedItem) return;
     setLoading(true);
@@ -492,19 +642,42 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
           Data: editFields.FinanceComments.trim(),
         });
       }
-      let updatedFinanceStatus = editFields.FinanceStatus || selectedItem.FinanceStatus || "";
-      if ((editFields.Status || selectedItem.Status) === "Payment Received") {
-        updatedFinanceStatus = "Paid";
-      } else {
-        updatedFinanceStatus = "Pending";
-      }
+      // let updatedFinanceStatus = editFields.FinanceStatus || selectedItem.FinanceStatus || "";
+      // if ((editFields.Status || selectedItem.Status) === "Payment Received") {
+      //   updatedFinanceStatus = "Paid";
+      // } else {
+      //   updatedFinanceStatus = "Pending";
+      // }
+      let newCurrentStatus: string;
+      let newFinanceStatus: string;
 
+      switch (editFields.Status) {
+        case "Payment Received":
+          newCurrentStatus = "Completed";
+          newFinanceStatus = "Paid";
+          break;
+        case "Cancelled":
+          newCurrentStatus = "Cancelled Request";
+          newFinanceStatus = "Cancelled";
+          break;
+        case "Not Generated":
+          newCurrentStatus = "Pending Finance Action";
+          newFinanceStatus = "Pending";
+          break;
+        case "Invoice Raised":
+          newCurrentStatus = "Finance In Progress";
+          newFinanceStatus = "Pending";
+          break;
+        default:
+          newCurrentStatus = selectedItem.CurrentStatus ?? "Not Generated";
+      }
       // Include updated FinanceCommentsHistory JSON string in update payload
       const updatePayload = {
         ...editFields,
         FinanceCommentsHistory: JSON.stringify(historyArr),
         FinanceComments: editFields.FinanceComments || "",
-        FinanceStatus: updatedFinanceStatus,
+        FinanceStatus: newFinanceStatus,
+        CurrentStatus: newCurrentStatus
       };
 
       // Update the list item fields
@@ -557,85 +730,12 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     }
     setLoading(false);
   }
-  // async function getCurrentUserRole(context: any, poId: any): Promise<string> {
-  //   try {
-  //     const currentUserEmail = context.pageContext.user.email.toLowerCase();
-  //     const projects = await projectsp
-  //       .web.lists.getByTitle("Projects")
-  //       .items
-  //       .filter(`Title eq '${poId?.ProjectName?.replace(/'/g, "''")}'`)
-  //       .select("PM/EMail", "DM/EMail", "DH/EMail")
-  //       .expand("PM", "DM", "DH")
-  //       .top(100)();
-
-  //     const project = projects[0];
-  //     if (!project) return "Unknown";
-
-  //     if (project.PM?.EMail.toLowerCase() === currentUserEmail) return "PM";
-  //     if (project.DM?.EMail.toLowerCase() === currentUserEmail) return "DM";
-  //     if (project.DH?.EMail.toLowerCase() === currentUserEmail) return "DH";
-
-  //     return "Unknown";
-  //   } catch (error) {
-  //     console.error("Error determining role", error);
-  //     return "Unknown";
-  //   }
-  // }
-
 
   return (
     <section style={{ background: "#fff", borderRadius: 8, padding: 16 }}>
       <h2 style={{ fontWeight: 600, marginBottom: 16 }}>Update Invoice Request</h2>
 
-      {/* FILTERS BAR */}
-      {/* <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 18 }} styles={{ root: { marginBottom: 20 } }}>
-        <div>
-          <Label>Search</Label>
-          <TextField
-            placeholder="Search"
-            value={filters.search}
-            onChange={(_, v) => setFilters(f => ({ ...f, search: v || "" }))}
-            styles={{ root: { width: 150 } }}
-          />
-        </div>
-        <div>
-          <Label>Current Status</Label>
-          <Dropdown
-            placeholder="Current Status"
-            options={financeStatusOptions}
-            selectedKey={filters.financeStatus}
-            onChange={(_, option) => setFilters(f => ({ ...f, financeStatus: (option?.key ?? "").toString() }))}
-            styles={{ root: { width: 150 } }}
-          />
-        </div>
-        <div>
-          <Label>Invoice Status</Label>
-          <Dropdown
-            placeholder="Invoice Status"
-            options={statusOptions}
-            selectedKey={filters.status}
-            onChange={(_, option) => setFilters(f => ({ ...f, status: option?.key as string || "" }))}
-            styles={{ root: { width: 150 } }}
-          />
-        </div>
-
-        <div>
-          <PrimaryButton
-            text="Clear"
-            onClick={clearFilters}
-            disabled={
-              !filters.search &&
-              !filters.requestedDate &&
-              !filters.customer &&
-              !filters.status &&
-              !filters.financeStatus
-            }
-            style={{ alignSelf: "center", marginLeft: 20 }}
-          />
-        </div>
-
-      </Stack> */}
-      <Stack horizontal tokens={{ childrenGap: 12 }} verticalAlign="end" styles={{ root: { marginBottom: 20 } }}>
+      <Stack horizontal tokens={{ childrenGap: 12 }} verticalAlign="end" styles={{ root: { marginBottom: 20, fontSize: 10 } }} className={styles['compact-panel']}>
         <Stack.Item align="end"><Stack styles={{ root: { width: 140 } }}><Label>Search</Label>
           <TextField
             placeholder="Search"
@@ -646,9 +746,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         <Stack.Item align="end"><Stack styles={{ root: { width: 140 } }}><Label>Current Status</Label>
           <Dropdown
             placeholder="Current Status"
-            options={financeStatusOptions}
-            selectedKey={filters.financeStatus}
-            onChange={(_, option) => setFilters(f => ({ ...f, financeStatus: (option?.key ?? "").toString() }))}
+            options={currentstatusOptions}
+            selectedKey={filters.currentstatus}
+            onChange={(_, option) => setFilters(f => ({ ...f, currentstatus: (option?.key ?? "").toString() }))}
           />
         </Stack></Stack.Item>
         <Stack.Item align="end"><Stack styles={{ root: { width: 140 } }}><Label>Invoice Status</Label>
@@ -668,8 +768,17 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
               !filters.requestedDate &&
               !filters.customer &&
               !filters.status &&
-              !filters.financeStatus
+              !filters.financeStatus &&
+              !filters.currentstatus
             }
+          />
+        </Stack.Item>
+        <Stack.Item align="end" styles={{ root: { paddingLeft: 12 } }}>
+          <IconButton
+            iconProps={{ iconName: 'ExcelDocument' }}
+            title="Export to Excel"
+            ariaLabel="Export to Excel"
+            onClick={handleExportToExcel}
           />
         </Stack.Item>
       </Stack>
@@ -679,14 +788,36 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       {loading && <Spinner label="Loading Invoice Requests..." />}
       {!loading && (
         <>
-          <DetailsList
-            items={filteredItems}
-            columns={columns}
-            selection={selection}
-            selectionMode={SelectionMode.single}
-            setKey="financeViewList"
-            styles={{ root: { backgroundColor: "#fff" } }}
-          />
+          <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
+            <div style={{ height: 300, position: 'relative' }}>
+              <ScrollablePane>
+                <div
+                  className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
+                >
+                  <DetailsList
+                    items={filteredItems}
+                    columns={columns}
+                    selection={selection}
+                    selectionMode={SelectionMode.single}
+                    setKey="financeViewList"
+                    styles={{ root: { backgroundColor: "#fff" } }}
+                    layoutMode={DetailsListLayoutMode.justified}
+                    isHeaderVisible={true}
+                    // onRenderRow={onRenderRow}
+                    selectionPreservedOnEmptyClick={true}
+                    onRenderDetailsHeader={onRenderDetailsHeader}
+                  />
+                </div>
+                {columnFilterMenu.visible && (
+                  <ContextualMenu
+                    items={menuItems}
+                    target={columnFilterMenu.target}
+                    onDismiss={() => setColumnFilterMenu({ visible: false, target: null, columnKey: null })}
+                  />
+                )}
+              </ScrollablePane>
+            </div>
+          </div>
         </>
       )}
 
@@ -694,10 +825,21 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         isOpen={isPanelOpen}
         onDismiss={handlePanelDismiss}
         headerText="Update Invoice Request"
-        type={PanelType.large}
-        customWidth="950px"
+        type={PanelType.custom}
+        customWidth="1000px"
         isBlocking={false}
         isFooterAtBottom={false}
+        styles={{
+          main: {
+            height: 'auto',
+            margin: 'auto',
+            borderRadius: 12,
+          },
+          scrollableContent: {
+            overflowY: 'auto',
+            padding: 5,
+          }
+        }}
       >
         {isPanelOpen && selectedItem && (
           <Stack
@@ -706,7 +848,6 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
             tokens={{ childrenGap: 20 }}
           >
             {!isViewerOpen && (
-              // ---- Form and Attachments Section ----
               <Stack
                 styles={{
                   root: {
@@ -735,6 +876,11 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                       }}
                       disabled={invoiceNumberLoaded}
                     />
+                    <DatePicker
+                      label="Due Date"
+                      value={editFields.DueDate ? new Date(editFields.DueDate) : undefined}
+                      onSelectDate={date => handleFieldChange('DueDate', date ? date.toISOString() : '')}
+                    />
                     <TextField
                       label="Previous PM Comments"
                       value={formatCommentHistory(selectedItem?.PMCommentsHistory) || ''}
@@ -746,15 +892,16 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                   </Stack>
                   {/* Right column */}
                   <Stack tokens={{ childrenGap: 12 }} styles={{ root: { minWidth: 300, flex: 1 } }}>
-                    <TextField label="Invoice Amount" value={selectedItem?.InvoiceAmount?.toString() || ''} disabled />
+                    <TextField label="Invoiced Amount" value={selectedItem?.InvoiceAmount?.toString() || ''} disabled />
                     <TextField label="Customer Contact" value={selectedItem?.Customer_x0020_Contact || ''} disabled />
                     <TextField label="PO Item Value" value={selectedItem?.POItem_x0020_Value || ''} disabled />
                     <Dropdown
                       label="Invoice Status"
-                      options={statusOptions}
+                      options={InvstatusOptions}
                       selectedKey={editFields.Status || selectedItem.Status || ''}
                       onChange={(_, option) => handleFieldChange('Status', option?.key)}
                     />
+                    <div style={{ height: 62 }}></div>
                     <TextField
                       label="Previous Finance Comments"
                       value={formatCommentHistory(selectedItem?.FinanceCommentsHistory) || ''}
@@ -873,18 +1020,56 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                       </>
                     ) : null}
                   </div>
-                  <PrimaryButton
-                    text="Remove All Attachments"
-                    onClick={e => {
-                      e.stopPropagation();
-                      setAttachments([]);
-                    }}
-                    disabled={attachments.length === 0}
-                    styles={{ root: { marginTop: 8, minWidth: 140 } }}
-                  />
+                  {/* List of newly added finance attachments with preview and remove */}
+                  {attachments.length > 0 && (
+                    <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                      {attachments.map((file, index) => (
+                        <li
+                          key={index}
+                          style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
+                        >
+                          <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => {
+                              setViewerFileUrl(URL.createObjectURL(file));
+                              setViewerFileName(file.name);
+                              setIsViewerOpen(true);
+                            }}>
+                            {file.name}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Remove this file from attachments
+                              setAttachments((prev) =>
+                                prev.filter((_, i) => i !== index)
+                              );
+                              // If preview open and currently previewing this file, close viewer
+                              if (viewerFileName === file.name) {
+                                setIsViewerOpen(false);
+                                setViewerFileUrl(null);
+                                setViewerFileName(null);
+                              }
+                            }}
+                            style={{
+                              marginLeft: 8,
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#a4262c',
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                            }}
+                            aria-label={`Remove ${file.name}`}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </Stack>
+                <div style={{ height: 62 }}></div>
                 {/* Buttons */}
-                <div style={{ height: 28 }} />
+                <div style={{ height: 28, marginTop: 25 }} />
                 <Stack horizontal tokens={{ childrenGap: 60 }} styles={{ root: { marginTop: 25, justifyContent: 'center' } }}>
                   <PrimaryButton onClick={handleClarification} text="Ask Clarification" />
                   <PrimaryButton onClick={handleSave} text="Submit" disabled={loading} />

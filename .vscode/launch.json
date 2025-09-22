@@ -5,7 +5,7 @@
       "name": "Hosted workbench",
       "type": "pwa-chrome",
       "request": "launch",
-      "url": "https://sachagroup.sharepoint.com/sites/dev.projects/_layouts/15/workbench.aspx",
+      "url": "https://sachagroup.sharepoint.com/sites/staging.InvoiceTracker/_layouts/15/workbench.aspx",
       "webRoot": "${workspaceRoot}",
       "sourceMaps": true,
       "sourceMapPathOverrides": {

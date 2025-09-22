@@ -16,9 +16,19 @@ import {
   SelectionMode,
   PanelType,
   IconButton,
-  Text
+  Text,
+  ScrollablePane,
+  IDetailsHeaderProps,
+  DetailsListLayoutMode,
+  IRenderFunction,
+  Sticky,
+  StickyPositionType,
+  ContextualMenu,
+  ContextualMenuItemType
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
+// import { columnSort, SortType } from "./SortingUtils"
+import styles from "./CreateView.module.scss"
 // import { SPFx } from "@pnp/sp/presets/all";
 interface CreateViewProps {
   sp: SPFI;
@@ -30,6 +40,7 @@ type PurchaseOrderItem = {
   POID: string;
   ProjectName?: string;
   POAmount?: string;
+  Currency: string;
 };
 type ChildPOItem = {
   Id: number;
@@ -48,6 +59,12 @@ type InvoiceRequest = {
   POItemValue?: number;
   CustomerContact?: string;
   Comments?: string;
+  PMCommentsHistory?: string;
+  FinanceCommentsHistory?: string;
+  Created?: string;
+  CreatedBy?: string;
+  Modified?: string;
+  ModifiedBy?: string;
 };
 type InvoiceFormState = {
   POID: string;
@@ -78,7 +95,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const [childPOSelection] = useState(new Selection());
   const [invoiceAmountError, setInvoiceAmountError] = useState<string | undefined>(undefined);
   const [isDragActive, setIsDragActive] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [previewFileIdx, setPreviewFileIdx] = useState<number | null>(null);
   const [selection] = useState(() =>
     new Selection({
       onSelectionChanged: () => {
@@ -95,13 +113,22 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const [isAdminUser, setIsAdminUser] = useState<boolean>(false);
   const [allProjects, setAllProjects] = useState<any[]>([]); // to hold Projects list data
   const [userGroups, setUserGroups] = useState<string[]>([]);
-
   // Invoice panel state
   const [isInvoicePanelOpen, setIsInvoicePanelOpen] = useState(false);
   const [invoicePanelPO, setInvoicePanelPO] = useState<ChildPOItem | null>(null);
   const [, setAllInvoicePOs] = useState<any[]>([]);
   const [mainPOs, setMainPOs] = useState<PurchaseOrderItem[]>([]);
   const [, setChildPOMap] = useState<Map<string, ChildPOItem[]>>(new Map());
+  const [invoiceCurrency, setInvoiceCurrency] = useState<string>("");
+  // const [, setColumns] = React.useState<IColumn[]>();
+  // const [items, setItems] = React.useState<PurchaseOrderItem[]>(mainPOs); // Your main PO items state
+  // const [, setSortedColumnKey] = React.useState<string | null>(null);
+  // const [, setIsSortedDescending] = React.useState<boolean>(false);
+  const [columnFilterMenu, setColumnFilterMenu] = React.useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({ visible: false, target: null, columnKey: null });
+
+  const [, setSortedColumnKey] = React.useState<string | null>(null);
+  const [, setIsSortedDescending] = React.useState<boolean>(false);
+
   // const [selectedMainPO, setSelectedMainPO] = useState<PurchaseOrderItem | null>(null);
   const [invoiceFormState, setInvoiceFormState] = useState<InvoiceFormState>({
     POID: "",
@@ -115,17 +142,131 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     Comments: "",
     Attachment: null,
   });
+  // const onColumnClick = (
+  //   ev: React.MouseEvent<HTMLElement>,
+  //   column: IColumn | undefined
+  // ) => {
+  //   if (!column) return;
+
+  //   let sortType: SortType;
+
+  //   switch (column.key) {
+  //     case 'POAmount':
+  //     case 'POItemValue':
+  //     case 'Amount':
+  //       sortType = SortType.Number;
+  //       break;
+  //     case 'Created':
+  //     case 'Modified':
+  //       sortType = SortType.Date;
+  //       break;
+  //     default:
+  //       sortType = SortType.String;
+  //   }
+
+  //   const { sortedItems, updatedColumns } = columnSort(ev, column, columns, items, sortType);
+
+  //   setColumns(updatedColumns);
+  //   setItems(sortedItems);
+  //   setSortedColumnKey(column.key);
+  //   setIsSortedDescending(updatedColumns.find(col => col.key === column.key)?.isSortedDescending ?? false);
+  // };
+
+  // const onColumnHeaderClick = (ev?: React.MouseEvent<HTMLElement>, column?: IColumn) => {
+  //   if (column) {
+  //     setColumnFilterMenu({
+  //       visible: true,
+  //       target: ev?.currentTarget || null,
+  //       columnKey: column.fieldName || column.key, // Use data fieldName to sort
+  //     });
+  //   }
+  // };
+  
+  const onColumnHeaderClick = (ev?: React.MouseEvent<HTMLElement>, column?: IColumn) => {
+    if (column && ev) {
+      setColumnFilterMenu({ visible: true, target: ev.currentTarget, columnKey: column.key });
+    }
+  };
   const columns: IColumn[] = [
-    { key: "POID", name: "Purchase Order", fieldName: "POID", minWidth: 100, maxWidth: 150, isResizable: true },
-    { key: "ProjectName", name: "Project Name", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true },
+    { key: "POID", name: "Purchase Order", fieldName: "POID", minWidth: 100, maxWidth: 150, isResizable: true, onColumnClick: onColumnHeaderClick },
+    { key: "ProjectName", name: "Project Name", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true, onColumnClick: onColumnHeaderClick },
     // { key: "Customer", name: "Customer", fieldName: "Customer", minWidth: 120, maxWidth: 160, isResizable: true },
-    { key: "POAmount", name: "PO Amount", fieldName: "POAmount", minWidth: 120, maxWidth: 160, isResizable: true }
+    { key: "POAmount", name: "PO Amount", fieldName: "POAmount", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick },
+    { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 70, maxWidth: 90, isResizable: true, onColumnClick: onColumnHeaderClick }
   ];
   const invoiceColumnsView: IColumn[] = [
     { key: "POItemTitle", name: "PO Item Title", fieldName: "POItemTitle", minWidth: 130, maxWidth: 180, isResizable: true },
-    { key: "POItemValue", name: "PO Item Value", fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true },
-    { key: "Amount", name: "Invoice Amount", fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true },
+    { key: "POItemValue", name: `PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true },
+    { key: "Amount", name: `Invoiced Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true },
     { key: "Status", name: "Status", fieldName: "Status", minWidth: 140, maxWidth: 170, isResizable: true },
+    {
+      key: "PMCommentsHistory",
+      name: "PM Comments History",
+      fieldName: "PMCommentsHistory",
+      minWidth: 200,
+      maxWidth: 300,
+      isResizable: true,
+      onRender: (item: InvoiceRequest) => {
+        if (!item.PMCommentsHistory) return "No PM Comments";
+        try {
+          const comments = formatCommentHistory(item.PMCommentsHistory);
+          return comments
+        } catch {
+          return "Invalid PMCommentsHistory";
+        }
+      }
+    },
+    {
+      key: "FinanceCommentsHistory",
+      name: "Finance Comments History",
+      fieldName: "FinanceCommentsHistory",
+      minWidth: 200,
+      maxWidth: 300,
+      isResizable: true,
+      onRender: (item: InvoiceRequest) => {
+        if (!item.FinanceCommentsHistory) return "No Finance Comments";
+        try {
+          const comments = formatCommentHistory(item.FinanceCommentsHistory);
+          return comments
+        } catch {
+          return "Invalid FinanceCommentsHistory";
+        }
+      }
+    },
+    {
+      key: "Created",
+      name: "Created",
+      fieldName: "Created",
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onRender: (item: InvoiceRequest) => new Date(item.Created).toLocaleString()
+    },
+    {
+      key: "CreatedBy",
+      name: "Created By",
+      fieldName: "CreatedBy",
+      minWidth: 150,
+      maxWidth: 200,
+      isResizable: true
+    },
+    {
+      key: "Modified",
+      name: "Modified",
+      fieldName: "Modified",
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onRender: (item: InvoiceRequest) => new Date(item.Modified).toLocaleString()
+    },
+    {
+      key: "ModifiedBy",
+      name: "Modified By",
+      fieldName: "ModifiedBy",
+      minWidth: 150,
+      maxWidth: 200,
+      isResizable: true
+    }
   ];
   const childPOColumns: IColumn[] = [
     {
@@ -141,7 +282,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     },
     {
       key: "POItemValue",
-      name: "PO Item Value",
+      name: `PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`,
       fieldName: "POItemValue",
       minWidth: 120,
       maxWidth: 140,
@@ -152,7 +293,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     },
 
     {
-      key: "POAmount", name: "Remaining Item Value", fieldName: "POAmount", minWidth: 120, maxWidth: 150, isResizable: true, onRender: (item: ChildPOItem) => {
+      key: "POAmount", name: `Remaining Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "POAmount", minWidth: 120, maxWidth: 150, isResizable: true, onRender: (item: ChildPOItem) => {
         const remaining = getRemainingPOAmount(item, invoiceRequests);
         return <span>{remaining}</span>;
       },
@@ -179,27 +320,46 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   ];
   const [invoicePanelLoading, setInvoicePanelLoading] = useState(false);
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragActive(false);
-    const file = e.dataTransfer.files[0];
-    if (file && (file.type === "application/pdf" || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || file.type === "application/vnd.ms-excel")) {
-      setUploadedFile(file);
-      setInvoiceFormState(prev => ({ ...prev, Attachment: file }));
-    }
-  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      setInvoiceFormState(prev => ({ ...prev, Attachment: file }));
-    }
-  };
+  // const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  //   e.preventDefault();
+  //   setIsDragActive(false);
+  //   const file = e.dataTransfer.files[0];
+  //   if (file && (file.type === "application/pdf" || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || file.type === "application/vnd.ms-excel")) {
+  //     setUploadedFiles(file);
+  //     setInvoiceFormState(prev => ({ ...prev, Attachment: file }));
+  //   }
+  // };
+  const menuItems = [
+    { key: 'asc', text: 'Sort Asc to Desc', iconProps: { iconName: 'SortUp' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc') },
+    { key: 'desc', text: 'Sort Desc to Asc', iconProps: { iconName: 'SortDown' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc') },
+    { key: 'divider', itemType: ContextualMenuItemType.Divider },
+    // { key: 'filter', text: 'Filter...', iconProps: { iconName: 'Filter' }, onClick: () => openFilterPanelFromMenu() },
+    // { key: 'clear', text: 'Clear Filter', iconProps: { iconName: 'ClearFilter' }, onClick: () => clearColumnFilter(columnFilterMenu.columnKey!) },
+  ];
+  const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
+    const sortedItems = [...filteredMainPOs].sort((a, b) => {
+      let aVal = (a as any)[columnKey];
+      let bVal = (b as any)[columnKey];
 
-  const handleRemoveAttachment = () => {
-    setInvoiceFormState(prev => ({ ...prev, Attachment: null }));
-    setUploadedFile(null);
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // Handle numbers and strings
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return direction === 'asc'
+        ? aVal.toString().localeCompare(bVal.toString())
+        : bVal.toString().localeCompare(aVal.toString());
+    });
+    setMainPOs(sortedItems)
+
+    // Close menu
+    setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+    // Update sort state if needed
+    setSortedColumnKey(columnKey);
+    setIsSortedDescending(direction === 'desc');
   };
 
   const handleInvoicePanelDismiss = () => {
@@ -210,7 +370,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       ...prev,
       Attachment: null,
     }));
-    setUploadedFile(null);
+    setUploadedFiles([]);
   };
 
   useEffect(() => {
@@ -220,7 +380,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       try {
         const items = await sp.web.lists.getByTitle("InvoicePO")
           .items
-          .select("ID", "POID", "ParentPOID", "POAmount", "LineItemsJSON", "ProjectName")();
+          .select("ID", "POID", "ParentPOID", "POAmount", "LineItemsJSON", "ProjectName", "Currency")();
 
         setAllInvoicePOs(items);
 
@@ -233,7 +393,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             Id: item.ID,
             POID: item.POID,
             ProjectName: item.ProjectName || "",
-            POAmount: item.POAmount || ""
+            POAmount: item.POAmount || "",
+            Currency: item.Currency || "",
           }));
 
         const childrenByMainPO = new Map<string, ChildPOItem[]>();
@@ -360,12 +521,38 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     return false;
   });
 
+  function formatCommentHistory(jsonStr?: string): string {
+    if (!jsonStr) return "";
+
+    try {
+      // Decode HTML entities before parsing JSON
+      const decodedStr = decodeHtmlEntities(jsonStr);
+
+      const arr = JSON.parse(decodedStr);
+      if (!Array.isArray(arr)) return "";
+
+      return arr.map((entry: any) => {
+        const dateObj = entry.Date ? new Date(entry.Date) : null;
+        const date = dateObj ? dateObj.toLocaleDateString() : "";
+        const time = dateObj ? dateObj.toLocaleTimeString() : "";
+        const title = entry.Title || entry.title || "";
+        const user = entry.User || "";
+        const role = entry.Role ? ` (${entry.Role})` : "";
+        const data = entry.Data || entry.comment || "";
+        return `[${date} ${time}]${user}${role} \n${title}:${data}`;
+      }).join("\n\n");
+
+    } catch (err) {
+      console.error("Failed to format comment history", err, jsonStr);
+      return "";
+    }
+  }
   const handleInvoiceAmountChange = (value: string) => {
     handleInvoiceFormChange("InvoiceAmount", value);
 
     const enteredAmount = parseFloat(value);
     if (!value) {
-      setInvoiceAmountError("Invoice Amount is required.");
+      setInvoiceAmountError("Invoiced Amount is required.");
     } else if (isNaN(enteredAmount) || enteredAmount <= 0) {
       setInvoiceAmountError("Please enter a valid positive number.");
     } else {
@@ -384,7 +571,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         invoiceRequests
       );
       if (enteredAmount > remainingAmount) {
-        setInvoiceAmountError(`Invoice Amount cannot exceed remaining amount: ${remainingAmount}`);
+        setInvoiceAmountError(`Invoiced Amount cannot exceed remaining amount: ${remainingAmount}`);
       } else {
         setInvoiceAmountError(undefined);
       }
@@ -392,10 +579,9 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   };
   const handleOpenPanel = async () => {
     if (!selectedItem) return;
-
+    setInvoiceCurrency(selectedItem.Currency || "");
     setFetchingChildPOs(true);
     setFetchingInvoices(true);
-
     setChildPOItems([]);
     setInvoiceRequests([]);
     setActivePOIDFilter(null);
@@ -474,6 +660,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setInvoicePanelPO(null);
     setIsInvoicePanelOpen(true);
     // const projectName = await getProjectNameByPOID(context, poItem.Id, poItem);
+    setInvoiceCurrency(poItem.Currency || "");
 
     setInvoiceFormState({
       POID: poItem.POID,
@@ -494,6 +681,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setInvoiceRequests([]);
     setActivePOIDFilter(null);
     childPOSelection.setAllSelected(false);
+    window.history.replaceState(null, '', window.location.pathname);
   };
   const handleChildPORowClick = (item?: ChildPOItem) => {
     if (item) {
@@ -511,13 +699,13 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       [field]: value,
     }));
   };
-  const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setInvoiceFormState((prev) => ({
-      ...prev,
-      Attachment: file,
-    }));
-  };
+  // const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const file = e.target.files?.[0] || null;
+  //   setInvoiceFormState((prev) => ({
+  //     ...prev,
+  //     Attachment: file,
+  //   }));
+  // };
   function getRemainingPOAmount(childPO: ChildPOItem, invoiceRequests: InvoiceRequest[]): number {
     const childInvoices = invoiceRequests.filter(inv => inv.POItemTitle === childPO.POID);
     const usedAmount = childInvoices.reduce((sum, inv) => sum + (inv.Amount || 0), 0);
@@ -530,6 +718,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setInvoicePanelLoading(true);
     setInvoicePanelPO(item);
     setIsInvoicePanelOpen(true);
+    setInvoiceCurrency(selectedItem.Currency || "");
+
     const parentPOID = selectedItem.POID;
     const parentPOIDId = selectedItem.Id;
     const projectName = await getProjectNameByPOID(context, parentPOIDId, selectedItem);
@@ -558,6 +748,62 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     }
     return null;
   }
+  const onRenderDetailsHeader: IRenderFunction<IDetailsHeaderProps> = (props, defaultRender) => {
+    if (!props) {
+      return null;
+    }
+    return (
+      <Sticky stickyPosition={StickyPositionType.Header}>
+        {defaultRender!({ ...props })}
+      </Sticky>
+    );
+  };
+  // Utility to approximate pixel width of text (rough)
+  function estimateWidth(text: string) {
+    return Math.min(300, Math.max(50, text.length * 10)); // min 50px, max 300px
+  }
+
+  // Compute column widths given items and columns config
+  function computeColumnWidths(items: any[], columns: IColumn[]): IColumn[] {
+    return columns.map(col => {
+      const headerWidth = estimateWidth(col.name);
+      const maxItemLength = items.reduce((max, item) => {
+        const val = item[col.fieldName as keyof typeof item];
+        const valStr = val !== undefined && val !== null ? String(val) : "";
+        return Math.max(max, valStr.length);
+      }, 0);
+      const dataWidth = estimateWidth('W'.repeat(maxItemLength));
+      const width = Math.max(headerWidth, dataWidth);
+
+      return {
+        ...col,
+        minWidth: width,
+        maxWidth: width,
+        isResizable: true,
+      };
+    });
+  }
+
+  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  // Drag-drop handler
+  const handleDropMulti = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    const files = Array.from(e.dataTransfer.files).filter(
+      file => ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"].includes(file.type)
+    );
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  // Remove specific file
+  const removeAttachment = (idx: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
   function decodeHtmlEntities(str: string): string {
     const txt = document.createElement("textarea");
     txt.innerHTML = str;
@@ -651,7 +897,11 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   async function fetchInvoiceRequests(sp: SPFI, poids: string[]): Promise<InvoiceRequest[]> {
     if (poids.length === 0) return [];
-    const filter = poids.map((po) => `PurchaseOrder eq '${po}'`).join(" or ");
+
+    const filter = `(${poids.map(po => `PurchaseOrder eq '${po}'`).join(" or ")})`;
+
+
+    console.log(filter);
     try {
       const items = await sp.web.lists
         .getByTitle("Invoice Requests")
@@ -665,11 +915,21 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           "POItem_x0020_Title",
           "POItem_x0020_Value",
           "ProjectName",
-          "Status"
-        )();
-      return items.map((item) => ({
+          "Status",
+          "PMCommentsHistory",
+          "FinanceCommentsHistory",
+          "Created",
+          "Author/Title",
+          "Modified",
+          "Editor/Title"
+        )
+        .expand("Author", "Editor")();
+
+      // console.log(items)
+      return items.map(item => ({
         Id: item.Id,
         PurchaseOrderPO: item.PurchaseOrder,
+        PurchaseOrder: item.PurchaseOrder,
         Amount: item.InvoiceAmount,
         Status: item.Status,
         ProjectName: item.ProjectName,
@@ -677,6 +937,12 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         POItemValue: item.POItem_x0020_Value,
         CustomerContact: item.Customer_x0020_Contact,
         Comments: item.Comments,
+        PMCommentsHistory: item.PMCommentsHistory,
+        FinanceCommentsHistory: item.FinanceCommentsHistory,
+        Created: item.Created,
+        CreatedBy: item.Author?.Title ?? "",
+        Modified: item.Modified,
+        ModifiedBy: item.Editor?.Title ?? "",
       }));
     } catch {
       return [];
@@ -724,7 +990,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   async function getProjectNameByPOID(context: any, poId: number, poItem: any): Promise<string> {
     try {
-      // const sp = spfi(PROJECTS_SITE_URL).using(SPFx(context));
       console.log("Fetching project name for POID:", poId, poItem);
       const getAllProjectsq = async (): Promise<any[]> => {
         const allItems: any[] = [];
@@ -765,12 +1030,12 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     let addedItemId: number | null = null;
     try {
       if (invoiceAmountError || !invoiceFormState.InvoiceAmount) {
-        alert(invoiceAmountError || "Invoice Amount is required.");
+        alert(invoiceAmountError || "Invoiced Amount is required.");
         return;
       }
       const userRole = await getCurrentUserRole(context, selectedItem);
 
-      const financeStatusValue = "Submitted";
+      const financeStatusValue = "Not Generated";
 
       const newCommentEntry = {
         Date: new Date().toISOString(),
@@ -792,6 +1057,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         PMStatus: "Submitted",
         FinanceStatus: "Pending",
         Status: financeStatusValue,
+        Currency: invoiceCurrency,
+        CurrentStatus: `Request Submitted by ${userRole}`
       });
 
       addedItemId = added.Id;
@@ -822,11 +1089,19 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           .attachmentFiles.add(fileNameWithSuffix, fileContent);
       }
 
-      const siteUrl = context.pageContext.web.absoluteUrl;
-      const listName = "Invoice Requests";
+      // const siteUrl = context.pageContext.web.absoluteUrl;
+      // const listName = "Invoice Requests";
 
-      const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${addedItemId}`;
+      // const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${addedItemId}`;
       const creatorEmail = context.pageContext.user.email;
+
+      const siteUrl = context.pageContext.web.absoluteUrl;
+      const pageName = context.pageContext.site.serverRequestPath.split('/').pop() || 'InvoiceTracker.aspx';
+      const appPageUrl = `${siteUrl}/SitePages/${pageName}`;
+
+      const itemLink = `${appPageUrl}#myrequests?selectedInvoice=${addedItemId}`;
+
+
       const sendNotificationEmail = async () => {
         try {
           await sp.utility.sendEmail({
@@ -837,9 +1112,9 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         <b>PO ID:</b> ${invoiceFormState.POID}<br/>
         <b>Project Name:</b> ${invoiceFormState.ProjectName}<br/>
         <b>PO Item Title:</b> ${invoiceFormState.POItemTitle}<br/>
-        <b>Invoice Amount:</b> ${invoiceFormState.InvoiceAmount}<br/>
+        <b>Invoiced Amount:</b> ${invoiceFormState.InvoiceAmount}<br/>
         <b>Comments:</b> ${invoiceFormState.Comments}<br/><br/>
-        <a href="${itemUrl}">Click here to view the invoice request.</a>
+        <a href="${itemLink}">Click here to view the invoice request.</a>
       `,
           });
           setDialogType("success");
@@ -882,6 +1157,17 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       alert("Error submitting invoice request: " + (error as any)?.message);
     }
   };
+  // Inside the CreateView component function, before return:
+
+  const adjustedChildColumns = computeColumnWidths(childPOItems, childPOColumns);
+
+  // For invoice requests, you have invoiceRequests as state; apply filter if needed:
+  const filteredInvoiceRequests = activePOIDFilter
+    ? invoiceRequests.filter((ir) => ir.POItemTitle === activePOIDFilter)
+    : invoiceRequests;
+
+  const adjustedInvoiceColumns = computeColumnWidths(filteredInvoiceRequests, invoiceColumnsView);
+
   return (
     <section style={{ background: "#fff", borderRadius: 8, padding: 16 }}>
       <div style={{ flexGrow: 1, overflowY: 'auto' }}>
@@ -898,40 +1184,90 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         {loading && <Spinner label="Loading data..." />}
         {error && <div style={{ color: "red" }}>{error}</div>}
         {!loading && !error && (
-          <div style={{ maxHeight: 500, overflowY: "auto", overflowX: "auto", border: "1px solid #eee", borderRadius: 4, background: "#fff" }}>
-            <DetailsList
-              items={filteredMainPOs}
-              columns={columns}
-              selection={selection}
-              selectionMode={SelectionMode.single}
-              setKey="mainPOsList"
-            />
+          <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
+            <div style={{ height: 300, position: 'relative' }}>
+              <ScrollablePane>
+                <div
+                  className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
+                >
+                  <DetailsList
+                    items={filteredMainPOs}
+                    columns={columns}
+                    selection={selection}
+                    selectionMode={SelectionMode.single}
+                    setKey="mainPOsList"
+                    isHeaderVisible={true}
+                    layoutMode={DetailsListLayoutMode.justified}
+                    selectionPreservedOnEmptyClick={true}
+                    onRenderDetailsHeader={onRenderDetailsHeader}
+                  />
+                </div>
+                {columnFilterMenu.visible && (
+                  <ContextualMenu
+                    items={menuItems}
+                    target={columnFilterMenu.target}
+                    onDismiss={() => setColumnFilterMenu({ visible: false, target: null, columnKey: null })}
+                  />
+                )}
+              </ScrollablePane>
+            </div>
           </div>
         )}
         <Panel
           isOpen={isPanelOpen}
           onDismiss={handlePanelDismiss}
-          headerText="Purchase Order"
+          // headerText="Purchase Order"
           closeButtonAriaLabel="Close"
-          type={PanelType.medium}
+          type={PanelType.custom}
           isLightDismiss={false}
           isBlocking={false}
           isFooterAtBottom={true}
+          styles={{
+            main: {
+              maxWidth: 1000,
+              width: '100%',
+              margin: 'auto',
+              borderRadius: 8,
+            },
+            scrollableContent: {
+              padding: 16,
+            },
+          }}
         >
           <Stack tokens={{ childrenGap: 18 }} styles={{ root: { marginTop: 6, marginBottom: 6 } }}>
+            {/* <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <TextField
+              label={"Purchase Order:"}
               value={selectedItem?.POID || ""}
               readOnly
               disabled
               styles={{ root: { maxWidth: 280, marginBottom: 0 } }}
             />
             <TextField
-              label="PO Amount"
+              label={`PO Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
               value={selectedItem?.POAmount || ""}
               readOnly
               disabled
               styles={{ root: { maxWidth: 280, marginTop: 10, marginBottom: 0 } }}
             />
+            </div> */}
+            <div style={{ display: "flex", flexDirection: "row", gap: 24, alignItems: "flex-start", marginTop: 0, marginBottom: 0 }}>
+              <TextField
+                label="Purchase Order"
+                value={selectedItem?.POID}
+                readOnly
+                disabled
+                styles={{ root: { maxWidth: 220, marginTop: 0, marginBottom: 0, fontSize: 15, fontWeight: 600 } }}
+              />
+              <TextField
+                label={`PO Amount${selectedItem?.Currency ? ` (${selectedItem?.Currency})` : ''}`}
+                value={selectedItem?.POAmount}
+                readOnly
+                disabled
+                styles={{ root: { maxWidth: 220, marginTop: 0, marginBottom: 0, fontSize: 15, fontWeight: 600 } }}
+              />
+            </div>
+
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 7, color: "#626262" }}>PO Items:</div>
             <div>
               {fetchingChildPOs ? (
@@ -939,13 +1275,20 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               ) : childPOItems.length > 0 ? (
                 <DetailsList
                   items={childPOItems}
-                  columns={childPOColumns}
+                  columns={adjustedChildColumns}
                   selection={childPOSelection}
                   selectionMode={SelectionMode.single}
                   setKey="childPOs"
                   onActiveItemChanged={handleChildPORowClick}
                   styles={{
-                    root: { background: "#fff", border: "1px solid #eee", borderRadius: 6 },
+                    root: {
+                      background: "#fff",
+                      border: "1px solid #eee",
+                      borderRadius: 6,
+                      overflowX: "hidden",
+                      width: '100%',
+                      minWidth: 0,
+                    },
                   }}
                 />
               ) : (
@@ -982,8 +1325,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               ) : showInvoices.length > 0 ? (
                 <DetailsList
                   items={showInvoices}
-                  columns={invoiceColumnsView}
-                  selectionMode={SelectionMode.single}
+                  columns={adjustedInvoiceColumns}
+                  selectionMode={SelectionMode.none}
                   setKey="invoiceRequests"
                   styles={{ root: { background: "#fff", border: "1px solid #eee", borderRadius: 6 } }}
                 />
@@ -995,9 +1338,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         </Panel>
         <Panel
           isOpen={isInvoicePanelOpen}
-          onDismiss={() => {
-            handleInvoicePanelDismiss();
-          }}
+          onDismiss={handleInvoicePanelDismiss}
           headerText="Create Invoice Request"
           closeButtonAriaLabel="Close"
           type={PanelType.custom}
@@ -1008,8 +1349,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               right: 0,
               left: "unset",
               margin: "auto",
-              maxWidth: 600,
-              minHeight: 350,
+              maxWidth: 900,
+              minHeight: 450,
               borderRadius: "12px 0 0 12px",
               boxShadow: " -4px 0 16px rgba(0,0,0,0.1)",
               background: "#fafafa",
@@ -1025,67 +1366,28 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             <Stack styles={{ root: { minHeight: 180, alignItems: "center", justifyContent: "center" } }}>
               <Spinner label="Loading invoice form..." size={3} />
             </Stack>
-          ) : invoicePanelPO === null ? (
-            // SINGLE PO invoice form rendering
-            <Stack tokens={{ childrenGap: 12 }} styles={{ root: { marginTop: 6, marginBottom: 6 } }}>
-              <TextField label="PO ID" value={invoiceFormState.POID} readOnly disabled />
-              <TextField label="Project Name" value={invoiceFormState.ProjectName} readOnly disabled />
-
-              {/* PO Item Title and Value hidden for single PO */}
-
-              <TextField
-                label="PO Value"
-                value={invoiceFormState.POAmount}
-                type="number"
-                disabled
-              />
-
-              <TextField
-                label="Invoice Amount"
-                value={invoiceFormState.InvoiceAmount}
-                onChange={(_, val) => handleInvoiceAmountChange(val || "")}
-                type="number"
-                required
-                errorMessage={invoiceAmountError}
-              />
-              <TextField
-                label="Customer Contact"
-                value={invoiceFormState.CustomerContact}
-                onChange={(_, val) => handleInvoiceFormChange("CustomerContact", val || "")}
-              />
-              <TextField
-                label="Comments"
-                value={invoiceFormState.Comments}
-                onChange={(_, val) => handleInvoiceFormChange("Comments", val || "")}
-                multiline
-              />
-              <label style={{ marginTop: 8, fontWeight: 500 }}>
-                Attachment <span style={{ marginLeft: 5, marginRight: 5, display: "inline-block" }}>🔗</span>
-                <input type="file" style={{ display: "block", marginTop: 6 }} onChange={handleAttachmentChange} />
-              </label>
-              <PrimaryButton text="Submit" onClick={handleInvoiceFormSubmit} />
-            </Stack>
           ) : (
-            // CHILD PO invoice form rendering
-            invoicePanelPO && (
-              <Stack tokens={{ childrenGap: 12 }} styles={{ root: { marginTop: 6, marginBottom: 6 } }}>
+            <Stack horizontal tokens={{ childrenGap: 18 }} styles={{ root: { marginTop: 6, marginBottom: 6, width: "100%" } }}>
+              {/* LEFT HALF: Invoice Form */}
+              <Stack styles={{ root: { flex: 1, minWidth: "340px", maxWidth: "48%" } }} tokens={{ childrenGap: 12 }}>
                 <TextField label="PO ID" value={invoiceFormState.POID} readOnly disabled />
                 <TextField label="Project Name" value={invoiceFormState.ProjectName} readOnly disabled />
-                <TextField label="PO Item Title" value={invoiceFormState.POItemTitle} readOnly disabled />
-                <TextField label="PO Item Value" value={invoiceFormState.POItemValue} readOnly disabled />
+                {invoicePanelPO && (
+                  <>
+                    <TextField label="PO Item Title" value={invoiceFormState.POItemTitle} readOnly disabled />
+                    <TextField label={`PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`} value={invoiceFormState.POItemValue} readOnly disabled />
+                    <TextField
+                      label={`Amount remaining${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
+                      value={String(getRemainingPOAmount(
+                        { POID: invoiceFormState.POItemTitle || "", POAmount: invoiceFormState.POItemValue || "0", Id: 0, ParentPOIndex: 0, POIndex: 0 },
+                        invoiceRequests
+                      ))}
+                      readOnly disabled
+                    />
+                  </>
+                )}
                 <TextField
-                  label="Amount remaining"
-                  value={String(
-                    getRemainingPOAmount(
-                      { POID: invoiceFormState.POItemTitle || "", POAmount: invoiceFormState.POItemValue || "0", Id: 0, ParentPOIndex: 0, POIndex: 0 },
-                      invoiceRequests
-                    )
-                  )}
-                  readOnly
-                  disabled
-                />
-                <TextField
-                  label="Invoice Amount"
+                  label={`Invoiced Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
                   value={invoiceFormState.InvoiceAmount}
                   onChange={(_, val) => handleInvoiceAmountChange(val || "")}
                   type="number"
@@ -1103,63 +1405,93 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                   onChange={(_, val) => handleInvoiceFormChange("Comments", val || "")}
                   multiline
                 />
-                {/* <label style={{ marginTop: 8, fontWeight: 500 }}>
-                  Attachment <span style={{ marginLeft: 5, marginRight: 5, display: "inline-block" }}>🔗</span>
-                  <input type="file" style={{ display: "block", marginTop: 6 }} onChange={handleAttachmentChange} />
-                </label> */}
-
-                <div
-                  style={{
-                    margin: "24px 0 12px 0",
-                    border: "2px dashed #d0d0d0",
-                    borderRadius: 8,
-                    padding: 28,
-                    textAlign: "center",
-                    background: isDragActive ? "#f6faff" : "#fafafa",
-                    transition: "background 0.2s,border 0.2s",
-                    position: "relative",
-                    cursor: "pointer",
-                    outline: isDragActive ? "2px solid #0078d4" : "none",
-                  }}
-                  onDragOver={e => { e.preventDefault(); setIsDragActive(true); }}
-                  onDragLeave={e => { e.preventDefault(); setIsDragActive(false); }}
-                  onDrop={handleDrop}
-                  onClick={() => document.getElementById("custom-attachment-input")?.click()}
-                >
-                  <input
-                    id="custom-attachment-input"
-                    type="file"
-                    accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                    style={{ display: "none" }}
-                    onChange={handleFileChange}
-                  />
-                  <span style={{ fontSize: 36, color: "#bebebe" }}>
-                    <i className="ms-Icon ms-Icon--Attach" aria-hidden="true"></i>
-                  </span>
-                  <div>Attachments</div>
-                  <div style={{ marginTop: 14, color: "#888", fontSize: 16 }}>
-                    Drop your file(s) here or click to upload.<br />
-                    <span style={{ color: "#555", fontSize: 14 }}>Only PDF and Excel files are accepted.</span>
-                  </div>
-                  {uploadedFile && (
-                    <div style={{ marginTop: 12, fontSize: 15, color: "#327800" }}>
-                      <i className="ms-Icon ms-Icon--DocumentSet" aria-hidden="true" style={{ marginRight: 8 }} />
-                      Selected: <strong>{uploadedFile.name}</strong>
-                      {/* <PrimaryButton text="Remove" onClick={handleRemoveAttachment} styles={{ root: { marginLeft: 12, height: 28, minWidth: 70 } }} /> */}
-                    </div>
-                  )}
-                  <PrimaryButton text="Remove"
-                    // onClick={handleRemoveAttachment}
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleRemoveAttachment();
-                    }}
-                    disabled={!uploadedFile}
-                    styles={{ root: { marginLeft: 12, height: 28, minWidth: 70 } }} />
-                </div>
-                <PrimaryButton text="Submit" onClick={handleInvoiceFormSubmit} />
+                <PrimaryButton text="Submit" onClick={handleInvoiceFormSubmit} styles={{ root: { marginTop: 12, minWidth: 110 } }} />
               </Stack>
-            )
+
+              {/* RIGHT HALF: Attachments & Preview */}
+              <Stack styles={{ root: { flex: 1, minWidth: "340px", maxWidth: "48%" } }}>
+                {previewFileIdx !== null && uploadedFiles[previewFileIdx] ? (
+                  <Stack>
+                    <PrimaryButton
+                      text="Close Preview"
+                      onClick={() => setPreviewFileIdx(null)}
+                      styles={{ root: { marginBottom: 10 } }}
+                    />
+                    <iframe
+                      src={URL.createObjectURL(uploadedFiles[previewFileIdx])}
+                      style={{
+                        width: "100%",
+                        height: "380px",
+                        border: "1px solid #eee",
+                        borderRadius: 8,
+                        marginBottom: 12,
+                      }}
+                      title={`Preview-${uploadedFiles[previewFileIdx].name}`}
+                    />
+                    <div style={{ fontSize: 14, color: "#888", wordBreak: "break-all", marginBottom: 6 }}>
+                      {uploadedFiles[previewFileIdx].name}
+                    </div>
+                  </Stack>
+                ) : (
+                  <Stack>
+                    <div
+                      style={{
+                        margin: "10px 0 18px 0",
+                        border: "2px dashed #d0d0d0",
+                        borderRadius: 8,
+                        padding: 24,
+                        textAlign: "center",
+                        background: isDragActive ? "#f6faff" : "#fafafa",
+                        cursor: "pointer"
+                      }}
+                      onDragOver={e => { e.preventDefault(); setIsDragActive(true); }}
+                      onDragLeave={e => { e.preventDefault(); setIsDragActive(false); }}
+                      onDrop={handleDropMulti}
+                      onClick={() => document.getElementById("multi-attachment-input")?.click()}
+                    >
+                      <input
+                        id="multi-attachment-input"
+                        type="file"
+                        multiple
+                        accept=".pdf,.xls,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                        style={{ display: "none" }}
+                        onChange={handleFilesChange}
+                      />
+                      <span style={{ fontSize: 36, color: "#bebebe" }}>
+                        <i className="ms-Icon ms-Icon--Attach" aria-hidden="true"></i>
+                      </span>
+                      <div style={{ fontWeight: 500, fontSize: 18, marginBottom: 4 }}>Attachments</div>
+                      <div style={{ color: "#888", fontSize: 15, marginTop: 4 }}>
+                        Drop or select file(s). Only PDF and Excel files accepted.
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      {uploadedFiles.length === 0 ? (
+                        <div style={{ color: "#999", fontStyle: "italic" }}>No files added yet.</div>
+                      ) : (
+                        uploadedFiles.map((file, idx) => (
+                          <Stack horizontal key={file.name + idx} verticalAlign="center" styles={{ root: { marginBottom: 6 } }}>
+                            <span style={{ flex: 1, fontWeight: 520, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</span>
+                            <IconButton
+                              iconProps={{ iconName: "Remove" }}
+                              title="Remove"
+                              ariaLabel={`Remove ${file.name}`}
+                              onClick={() => removeAttachment(idx)}
+                              styles={{ root: { height: 28, minWidth: 28, color: "#ba0808" } }}
+                            />
+                            <PrimaryButton
+                              text="Preview"
+                              onClick={() => setPreviewFileIdx(idx)}
+                              styles={{ root: { marginLeft: 10, minWidth: 60, height: 28 } }}
+                            />
+                          </Stack>
+                        ))
+                      )}
+                    </div>
+                  </Stack>
+                )}
+              </Stack>
+            </Stack>
           )}
 
           {invoicePanelPO && (
@@ -1171,7 +1503,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 <DetailsList
                   items={invoiceRequests.filter((inv) => inv.POItemTitle === invoiceFormState.POItemTitle)}
                   columns={invoiceColumnsView}
-                  selectionMode={SelectionMode.single}
+                  selectionMode={SelectionMode.none}
                   styles={{ root: { maxHeight: 200, overflowY: "auto", background: "#fafafa", border: "1px solid #eee", borderRadius: 4 } }}
                 />
               </div>

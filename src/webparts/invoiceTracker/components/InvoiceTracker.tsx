@@ -20,6 +20,7 @@ export interface IInvoiceTrackerProps {
   onConfigChange?: (settings: any) => void;
   selectedSites: string[];
   projectSiteUrl?: string;
+  getCurrentPageUrl?: () => string;
 }
 interface IInvoiceTrackerState {
   loading: boolean;
@@ -34,6 +35,7 @@ interface IInvoiceTrackerState {
     [key: string]: any;
   };
   clarificationCount?: number;
+  userGroups: string[];
 }
 
 export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps, IInvoiceTrackerState> {
@@ -53,6 +55,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       isAdminUser: false,
       pendingRequests: 0,
       paymentPending: 0,
+      userGroups: [],
     };
     this.sp = spfi().using(SPFx(this.props.context));
     this.setCanvasParentStyles();
@@ -70,13 +73,33 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
   public async componentDidMount() {
 
+    // window.addEventListener("resize", this.handleResize);
+    // this.handleResize();
+
     window.addEventListener("popstate", this.onPopState);
+    await this.fetchUserGroups();
 
-    const hash = window.location.hash;
-    const initialTab = hash ? hash.replace("#", "") : "home";
-    window.history.replaceState({ selectedTab: initialTab }, "", `#${initialTab}`);
+    // const hash = window.location.hash;
+    // const initialTab = hash ? hash.replace("#", "") : "home";
+    // window.history.replaceState({ selectedTab: initialTab }, "", `#${initialTab}`);
 
-    this.setState({ selectedTab: initialTab });
+    // this.setState({ selectedTab: initialTab });
+    const fragment = window.location.hash.substring(1); // 'myrequests?selectedInvoice=13'
+    const [tab, query] = fragment.split("?");
+    const params = new URLSearchParams(query || "");
+    const selectedInvoice = params.get("selectedInvoice");
+
+    window.history.replaceState(
+      { selectedTab: tab || "home", filter: { selectedInvoice } },
+      "",
+      window.location.href
+    );
+
+    this.setState({
+      selectedTab: tab || "home",
+      filter: selectedInvoice ? { selectedInvoice } : undefined,
+    });
+
 
     // const canvas = document.querySelector('.CanvasSection');
     // if (canvas && canvas.parentElement) {
@@ -84,14 +107,13 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     //   canvas.parentElement.style.minWidth = "100%";
     //   canvas.parentElement.style.maxWidth = "100%";
     //   canvas.parentElement.style.position = "fixed";
-    //   canvas.parentElement.style.top = "0";
+    //   canvas.parentElement.style.top = "0"
     //   canvas.parentElement.style.left = "0";
     //   canvas.parentElement.style.height = "100%";
     //   canvas.parentElement.style.zIndex = "1000";
     //   canvas.parentElement.style.margin = "0";
     //   canvas.parentElement.style.background = "#fff";
     // }
-
     this.setState({ loading: true, progress: 10 });
     const roles = await this.getUserRoles();
     const isAdmin = roles.includes("admin");
@@ -117,7 +139,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     await this.ensureInvoicePOList();
     this.updateProgress();
 
-    await this.ensureAttachmentsLibrary();
+    await this.ensureConfigList();
     this.updateProgress();
 
     await this.loadConfiguration();
@@ -130,7 +152,15 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
   public componentWillUnmount() {
     window.removeEventListener("popstate", this.onPopState);
+    // window.removeEventListener("resize", this.handleResize);
   }
+
+  // private handleResize = () => {
+  //   this.setState({
+  //     windowHeight: window.innerHeight,
+  //     windowWidth: window.innerWidth,
+  //   });
+  // };
 
   private async getUserRoles(): Promise<string[]> {
     try {
@@ -138,6 +168,15 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       return groups.map(g => g.Title);
     } catch {
       return ["User"];
+    }
+  }
+  private async fetchUserGroups() {
+    try {
+      const groups = await this.sp.web.currentUser.groups();
+      const groupTitles = groups.map(g => g.Title);
+      this.setState({ userGroups: groupTitles });
+    } catch {
+      this.setState({ userGroups: [] });
     }
   }
 
@@ -171,10 +210,10 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         // Add fields
         await list.fields.addText("PurchaseOrder", { MaxLength: 255 });
         await list.fields.addText("ProjectName", { MaxLength: 255 });
-        await list.fields.addText("POItem_x0020_Title", { MaxLength: 255 });    // SharePoint internal name for space: _x0020_
-        await list.fields.addNumber("POItem_x0020_Value");
+        await list.fields.addText("POItem Title", { MaxLength: 255 });    // SharePoint internal name for space: _x0020_
+        await list.fields.addNumber("POItem Value");
         await list.fields.addNumber("InvoiceAmount");
-        await list.fields.addText("Customer_x0020_Contact", { MaxLength: 255 });
+        await list.fields.addText("Customer Contact", { MaxLength: 255 });
         await list.fields.addMultilineText("Comments");
 
         await list.fields.addText("Status", { MaxLength: 255 });
@@ -188,11 +227,12 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
         await list.fields.addNumber("POAmount");
         await list.fields.addText("CurrentStatus", { MaxLength: 255 });
+        await list.fields.addText("Currency")
+        await list.fields.addDateTime("DueDate")
         await list.fields.getByInternalNameOrTitle("Title").update({ Title: "Title", Required: false, Hidden: true });
       }
     }
   }
-
 
   private async ensureInvoicePOList() {
     try {
@@ -210,7 +250,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         await list.fields.addNumber("POAmount");
         await list.fields.addMultilineText("LineItemsJSON");
         await list.fields.addText("ProjectName", { MaxLength: 255 });
-
+        await list.fields.addText("Currency");
         // Optionally, hide/unrequire default Title field
         await list.fields.getByInternalNameOrTitle("Title").update({ Title: "Title", Required: false, Hidden: true });
       } else {
@@ -219,20 +259,36 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     }
   }
 
-
-  private async ensureAttachmentsLibrary() {
+  private async ensureConfigList() {
     try {
-      // Try to get the list - if it exists this will succeed
-      await this.sp.web.lists.getByTitle("InvoiceAttachments").select("Id")();
+      // Try to get the list by title
+      await this.sp.web.lists.getByTitle("InvoiceConfiguration").select("Id")();
     } catch (error: any) {
       if (error.status === 404) {
-        // Not found, create document library
-        await this.sp.web.lists.add("InvoiceAttachments", "Document library for invoice attachments", 101); // 101 = Document Library template
+        // List not found, so create it
+        const addResult = await this.sp.web.lists.add("InvoiceConfiguration", "Stores Configuration", 100); // 100 = Custom List
+        const list = this.sp.web.lists.getById(addResult.Id);
+
+        await list.fields.addMultilineText("Value");
       } else {
-        throw error; // rethrow other errors
+        throw error; // rethrow if not a 'not found' error
       }
     }
   }
+
+  // private async ensureAttachmentsLibrary() {
+  //   try {
+  //     // Try to get the list - if it exists this will succeed
+  //     await this.sp.web.lists.getByTitle("InvoiceAttachments").select("Id")();
+  //   } catch (error: any) {
+  //     if (error.status === 404) {
+  //       // Not found, create document library
+  //       await this.sp.web.lists.add("InvoiceAttachments", "Document library for invoice attachments", 101); // 101 = Document Library template
+  //     } else {
+  //       throw error; // rethrow other errors
+  //     }
+  //   }
+  // }
 
   // private async loadCounts() {
   //   try {
@@ -329,7 +385,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     }
   };
 
-
   private setCanvasParentStyles() {
     const canvasSection = document.querySelector(".CanvasSection");
     if (canvasSection) {
@@ -357,9 +412,24 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       return; // already on this tab
     }
     this.setState({ selectedTab: pageKey, filter: params?.initialFilters });
-    const stateData = { selectedTab: pageKey, filter: params?.initialFilters };
-    window.history.pushState(stateData, "", `#${pageKey}`);
+
+    const baseUrl = this.getCurrentPageUrl();
+    let newUrl = `${baseUrl}#${pageKey}`;
+
+    if (params?.initialFilters?.selectedInvoice) {
+      newUrl += `?selectedInvoice=${params.initialFilters.selectedInvoice}`;
+    }
+
+    window.history.pushState({ selectedTab: pageKey, filter: params?.initialFilters }, "", newUrl);
   };
+
+  private getCurrentPageUrl(): string {
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    const pageName = pathSegments[pathSegments.length - 1];
+    const sitePath = pathSegments.slice(0, -1).join('/');
+    return `${window.location.origin}/${sitePath}/${pageName}`;
+  }
+
   private renderContent() {
     const { selectedTab, userRoles, isAdminUser } = this.state;
     const isFinance = userRoles.includes("Finance");
@@ -375,7 +445,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         break;
       case "myrequests":
         if (isPMorDMorDH || isAdminUser)
-          return <MyRequests sp={this.sp} projectsp={this.projectSp} context={this.props.context} initialFilters={this.state.filter} onNavigate={this.handleNavigate} />;
+          return <MyRequests sp={this.sp} projectsp={this.projectSp} context={this.props.context} initialFilters={this.state.filter} onNavigate={this.handleNavigate} getCurrentPageUrl={this.getCurrentPageUrl} />;
         break;
       case "Createview":
         if (isPMorDMorDH || isAdminUser)
@@ -405,9 +475,10 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
 
   public render() {
+
     if (this.state.loading) {
       return (
-        <div className={styles.invoiceTracker}>
+        <div className={styles.invoiceTracker} style={{ height: 100, overflow: 'auto' }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <ProgressIndicator
               label="Configuring Invoice Tracker..."
@@ -433,11 +504,13 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           </div>
           <div className={styles.sidebarFooter}>
             <Persona text={this.props.userDisplayName} size={PersonaSize.size24} />
+            <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+               {`(${this.state.userGroups.join(", ")})`}
+            </div>
           </div>
         </div>
         <div className={styles.workspace}>{this.renderContent()}</div>
       </div>
-
     );
   }
 }

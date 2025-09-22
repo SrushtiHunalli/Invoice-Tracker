@@ -17,10 +17,35 @@ import { useState, useEffect } from "react";
 import { NormalPeoplePicker } from '@fluentui/react/lib/Pickers';
 
 const pageSettings = [
-  { label: 'Command Bar', tooltip: 'Show or hide the command bar.', stateVariable: 'hideCommandBar', sharepointElement: '.CommandBarWrapper' },
-  { label: 'Sidebar', tooltip: 'Show or hide the sidebar.', stateVariable: 'hideSidebar', sharepointElement: '.sidebar' },
-  { label: 'Footer', tooltip: 'Show or hide the footer.', stateVariable: 'hideFooter', sharepointElement: '.footer' }
+  { label: "Hide Command Bar", stateVariable: "hideCommandBar", sharepointElement: ".ms-CommandBar", tooltip: "Hide/show the SharePoint command bar.", type: "toggle" },
+  { label: "Hide Comments Wrapper", stateVariable: "hideCommentsWrapper", sharepointElement: "#CommentsWrapper", tooltip: "Hide/show the comments section.", type: "toggle" },
+  { label: "Hide Page Title", stateVariable: "hidePageTitle", sharepointElement: "h1[data-automation-id='pageHeader']", tooltip: "Hide/show the page title on top.", type: "toggle" },
+  { label: "Hide SideApp Bar", stateVariable: "hideSideAppBar", sharepointElement: "#spLeftNav", tooltip: "Hide/show the side navigation panel.", type: "toggle" },
+  { label: "Hide Site Header", stateVariable: "hideSiteHeader", sharepointElement: "#spSiteHeader", tooltip: "Hide/show the main site header area.", type: "toggle" },
+  { label: "Hide Office365 Navbar", stateVariable: "hideO365BrandNavbar", sharepointElement: "#SuiteNavWrapper", tooltip: "Hide/show the O365 branding bar.", type: "toggle" },
+  { label: "Hide SharePoint Hub Navbar", stateVariable: "hideSharepointHubNavbar", sharepointElement: ".ms-HubNav", tooltip: "Hide/show SharePoint hub navigation.", type: "toggle" }
 ];
+
+
+const SETTINGS_LIST = "InvoiceConfiguration";
+const PAGE_CONFIG_ITEM_TITLE = "PageConfig";
+
+const suggestionProps: IBasePickerSuggestionsProps = {
+  suggestionsHeaderText: 'Suggested People',
+  noResultsFoundText: 'No results found',
+  mostRecentlyUsedHeaderText: 'Recent',
+};
+const toggleElement = (selector: string, hide: boolean, retries = 5) => {
+  const element = document.querySelector(selector) as HTMLElement | null;
+  if (!element) {
+    if (retries > 0) {
+      setTimeout(() => toggleElement(selector, hide, retries - 1), 500); // retry after 0.5s
+    }
+    return;
+  }
+  element.style.setProperty("display", hide ? "none" : "", "important");
+};
+
 
 interface SettingsProps {
   sp: SPFI;
@@ -28,150 +53,149 @@ interface SettingsProps {
   context?: any;
 }
 
-const suggestionProps: IBasePickerSuggestionsProps = {
-  suggestionsHeaderText: 'Suggested People',
-  noResultsFoundText: 'No results found',
-  mostRecentlyUsedHeaderText: 'Recent',
-};
-
 const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
   const [loading, setLoading] = useState(true);
+  const [savingConfig, setSavingConfig] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Record<string, boolean>>({
-    hideCommandBar: false,
-    hideSidebar: false,
-    hideFooter: false,
-  });
+  const [settings, setSettings] = useState<Record<string, boolean>>(
+    pageSettings.reduce((acc, item) => {
+      acc[item.stateVariable] = false;
+      return acc;
+    }, {} as Record<string, boolean>)
+  );
   const [financePeople, setFinancePeople] = useState<IPersonaProps[]>([]);
 
-  // Load Finance Emails from InvoiceConfiguration list
-  // useEffect(() => {
-  //   async function loadFinanceEmails() {
-  //     try {
-  //       const items = await sp.web.lists
-  //         .getByTitle('InvoiceConfiguration')
-  //         .items
-  //         .filter(`Title eq 'Finance Email'`)
-  //         .top(1)();
+  // Load page settings from InvoiceConfiguration list
+  useEffect(() => {
+    async function loadPageSettings() {
+      try {
+        const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
+        if (items.length > 0 && items[0].Value) {
+          const settingValues = JSON.parse(items[0].Value);
+          setSettings(prev => ({ ...prev, ...settingValues }));
+        }
+      } catch {
+        // fallback defaults
+      }
+      setLoading(false);
+    }
+    loadPageSettings();
+  }, [sp]);
 
-  //       if (items.length > 0) {
-  //         // If Data column is Person or Group, fetch user emails from those users
-  //         // But for simplicity, assume Data has stored emails separated by semicolon as fallback
-  //         const rawData = items[0].Data;
-  //         if (typeof rawData === "string") {
-  //           const emails = rawData.split(";").map((e: any) => e.trim()).filter((e: any) => e);
-  //           const personas = emails.map((email: string) => ({ text: email, secondaryText: email }));
-  //           setFinancePeople(personas);
-  //         } else if (Array.isArray(rawData)) {
-  //           // If Data is actually array of users (complex type), map accordingly
-  //           const personas = rawData.map((user: any) => ({ text: user.Title || user.Email || user.LoginName, secondaryText: user.Email || user.LoginName }));
-  //           setFinancePeople(personas);
-  //         }
-  //       }
-  //       setLoading(false);
-  //     } catch {
-  //       setError('Error loading Finance Emails');
-  //       setLoading(false);
-  //     }
-  //   }
-  //   loadFinanceEmails();
-  // }, [sp]);
+  // Apply page toggles on settings change
+  useEffect(() => {
+    pageSettings.forEach(ps => {
+      const hide = settings[ps.stateVariable];
+      const element = document.querySelector(ps.sharepointElement);
+      if (element instanceof HTMLElement) {
+        element.style.setProperty("display", hide ? "none" : "", "important");
+      }
+      toggleElement(ps.sharepointElement, settings[ps.stateVariable]);
+    });
+  }, [settings]);
+
+  // Load Finance Emails from InvoiceConfiguration list
   useEffect(() => {
     async function loadFinanceEmails() {
       try {
-        const items = await sp.web.lists
-          .getByTitle('InvoiceConfiguration')
-          .items
-          .filter(`Title eq 'Finance Email'`)
-          .top(1)();
-
+        const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq 'FinanceEmail'`).top(1)();
         if (items.length > 0) {
-          const rawData = items[0].Data; // semicolon-separated emails string
-          if (typeof rawData === "string") {
-            const emails = rawData.split(";").map(e => e.trim()).filter(e => e);
-            const personas = emails.map(email => ({ text: email, secondaryText: email }));
-            setFinancePeople(personas);
-          } else {
-            // fallback empty or other type cases
-            setFinancePeople([{ text: "srushti.hunalli@sacha.solutions", secondaryText: "srushti.hunalli@sacha.solutions" }]);
-          }
+          const rawData = items[0].Value || items[0].Data;
+          // Allow both , and ; as separators
+          const emails = typeof rawData === "string" ?
+            rawData.split(/[;,]/).map(e => e.trim()).filter(e => e) : [];
+          const resolved = await resolvePeopleByEmails(sp, emails);
+          setFinancePeople(resolved);
         }
-        setLoading(false);
       } catch {
-        setError('Error loading Finance Emails');
-        setLoading(false);
+        setFinancePeople([]);
       }
     }
     loadFinanceEmails();
   }, [sp]);
 
-
-  const saveFinanceEmails = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const emailsString = financePeople.map(p => p.secondaryText || '').filter(e => e).join(';');
-
-      // Check if 'Finance Email' item exists
-      const items = await sp.web.lists
-        .getByTitle('InvoiceConfiguration')
-        .items
-        .filter(`Title eq 'Finance Email'`)
-        .top(1)();
-
-      if (items.length === 0) {
-        // Create new item with Data column as string of emails
-        await sp.web.lists.getByTitle('InvoiceConfiguration').items.add({
-          Title: 'Finance Email',
-          Value: emailsString
+  async function resolvePeopleByEmails(sp: SPFI, emails: string[]): Promise<IPersonaProps[]> {
+    const resolvedPeople: IPersonaProps[] = [];
+    for (const email of emails) {
+      if (!email) continue;
+      // Search for exact match user profile by email
+      const results = await sp.utility.searchPrincipals(
+        email, PrincipalType.User, PrincipalSource.All, null, 1
+      );
+      const user = results?.[0];
+      if (user) {
+        resolvedPeople.push({
+          text: user.DisplayName || user.LoginName || email,
+          secondaryText: user.Email || email,
+          id: (user.Email.toString() || user.PrincipalId?.toString() || user.LoginName || email)
         });
       } else {
-        // Update existing item
-        await sp.web.lists.getByTitle('InvoiceConfiguration').items.getById(items[0].Id).update({
-          Value: emailsString
+        // Fallback: just use the email
+        resolvedPeople.push({
+          text: email,
+          secondaryText: email,
+          id: email
         });
       }
-
-      setLoading(false);
+    }
+    return resolvedPeople;
+  }
+  // Persist Finance Emails
+  const saveFinanceEmails = async () => {
+    setSavingConfig(true);
+    setError(null);
+    try {
+      const emailsString = financePeople.map(p => p.secondaryText || '').filter(e => e).join(',');
+      const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq 'FinanceEmail'`).top(1)();
+      if (items.length === 0) {
+        await sp.web.lists.getByTitle(SETTINGS_LIST).items.add({ Title: 'FinanceEmail', Value: emailsString });
+      } else {
+        await sp.web.lists.getByTitle(SETTINGS_LIST).items.getById(items[0].Id).update({ Value: emailsString });
+      }
+      setSavingConfig(false);
       alert('Finance Emails saved successfully');
-
     } catch (e) {
       setError('Error saving emails');
-      setLoading(false);
-      console.error(e);
+      setSavingConfig(false);
     }
   };
 
-
-  const toggleElement = (selector: string, hide: boolean) => {
-    const element = document.querySelector(selector);
-    if (element && element instanceof HTMLElement) {
-      element.style.display = hide ? 'none' : '';
-    }
-  };
-
-  const onToggleChange = (key: string, checked?: boolean) => {
+  // On toggle change: update UI and save immediately
+  const onToggleChange = async (key: string, checked?: boolean) => {
     if (checked === undefined) return;
     const updated = { ...settings, [key]: checked };
     setSettings(updated);
     if (onSettingsUpdate) onSettingsUpdate(updated);
-    const setting = pageSettings.find(s => s.stateVariable === key);
-    if (setting) toggleElement(setting.sharepointElement, checked!);
+
+    // Immediate UI update handled by useEffect on settings
+
+    // Save updated config asynchronously
+    try {
+      setSavingConfig(true);
+      const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
+      const configValue = JSON.stringify(updated);
+      if (items.length === 0) {
+        await sp.web.lists.getByTitle(SETTINGS_LIST).items.add({ Title: PAGE_CONFIG_ITEM_TITLE, Value: configValue });
+      } else {
+        await sp.web.lists.getByTitle(SETTINGS_LIST).items.getById(items[0].Id).update({ Value: configValue });
+      }
+      setSavingConfig(false);
+    } catch (e) {
+      setSavingConfig(false);
+      setError("Error saving settings");
+    }
   };
 
   if (loading) return <Spinner label="Loading settings..." />;
 
   return (
-    <div style={{ maxWidth: 450, padding: 10 }}>
-      <Text variant="large" styles={{ root: { fontWeight: 600, fontSize: 20, marginBottom: 22 } }}>
-        Settings
-      </Text>
+    <div style={{ maxWidth: 480, padding: 12 }}>
+      <Text variant="large" styles={{ root: { fontWeight: 600, fontSize: 20, marginBottom: 22 } }}>Settings</Text>
       <Pivot>
         <PivotItem headerText="General" itemKey="general">
           <Stack tokens={{ childrenGap: 22 }} styles={{ root: { marginTop: 14, marginBottom: 12 } }}>
-            {/* <NormalPeoplePicker
-              onResolveSuggestions={async (filterText: string, selectedItems?: IPersonaProps[]) => {
+            <NormalPeoplePicker
+              onResolveSuggestions={async (filterText, selectedItems) => {
                 if (!filterText) return [];
                 const results = await sp.utility.searchPrincipals(
                   filterText,
@@ -182,66 +206,47 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
                 );
                 return results
                   .map((user: any) => ({
-                    text: user.DisplayName || user.DisplayText || user.Title,
-                    secondaryText: user.Email || user.EMail || '',
-                    id: user.Key,
+                    text: user.DisplayName || user.LoginName,
+                    secondaryText: user.Email || "",
+                    id: user.Id?.toString() || user.PrincipalId?.toString() || user.LoginName
                   }))
                   .filter(p => !selectedItems?.some(si => si.id === p.id));
               }}
-              onChange={(items?: IPersonaProps[]) => setFinancePeople(items || [])}
-              selectedItems={financePeople}
-              pickerSuggestionsProps={suggestionProps}
-              resolveDelay={300}
-              inputProps={{ placeholder: 'Select Finance person(s)' }}
-            /> */}
-
-            <NormalPeoplePicker
-              onResolveSuggestions={async (filterText: string, selectedItems?: IPersonaProps[]) => {
-                if (!filterText) return [];
-                const results = await sp.utility.searchPrincipals(
-                  filterText,
-                  PrincipalType.User,
-                  PrincipalSource.All,
-                  null,
-                  5
-                );
-                return results.map((user: any) => ({
-                  text: user.DisplayName || user.LoginName,
-                  secondaryText: user.Email || "",
-                  id: user.Id?.toString() || user.PrincipalId?.toString() || user.LoginName
-                }))
-                  .filter(p => !selectedItems?.some(si => si.id === p.id));
-              }}
-              onChange={(items?: IPersonaProps[]) => setFinancePeople(items || [])}
+              onChange={items => setFinancePeople(items || [])}
               selectedItems={financePeople}
               pickerSuggestionsProps={suggestionProps}
               resolveDelay={300}
               inputProps={{ placeholder: 'Select Finance person(s)' }}
             />
-
-
             <PrimaryButton
               text="Save"
               onClick={saveFinanceEmails}
-              disabled={loading}
+              disabled={savingConfig}
               styles={{ root: { marginTop: 18, width: "100%", maxWidth: 340, fontWeight: 600, fontSize: 16 } }}
             />
-
             {error && <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>}
           </Stack>
         </PivotItem>
-
         <PivotItem headerText="Page" itemKey="page">
           <Stack tokens={{ childrenGap: 16, padding: 8 }}>
             {pageSettings.map(ps => (
-              <Toggle
+              <Stack
                 key={ps.stateVariable}
-                label={ps.label}
-                checked={settings[ps.stateVariable]}
-                onChange={(_e, checked) => onToggleChange(ps.stateVariable, checked)}
-                onText="Hide"
-                offText="Show"
-              />
+                horizontal
+                verticalAlign="center"
+                tokens={{ childrenGap: 12 }}
+                styles={{ root: { justifyContent: "space-between" } }}
+              >
+                <Text title={ps.tooltip} style={{ minWidth: 170, fontWeight: 500 }}>
+                  {ps.label.replace(/^Hide\s?/, '')}
+                </Text>
+                <Toggle
+                  checked={settings[ps.stateVariable]}
+                  onChange={(_e, checked) => onToggleChange(ps.stateVariable, checked)}
+                  onText="Hide"
+                  offText="Show"
+                />
+              </Stack>
             ))}
           </Stack>
         </PivotItem>

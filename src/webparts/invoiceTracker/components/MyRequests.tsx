@@ -1,5 +1,8 @@
+
 import * as React from "react";
 import { useState, useEffect } from "react";
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import {
   DetailsList,
   SelectionMode,
@@ -12,17 +15,30 @@ import {
   PanelType,
   Selection,
   Dropdown,
-  IDropdownOption,
+  IDropdownStyles,
   Stack,
   Dialog,
   DialogType,
   DialogFooter,
   PrimaryButton,
   Label,
+  Text,
+  Separator,
+  Icon,
+  IconButton,
+  IDetailsHeaderProps,
+  DetailsListLayoutMode,
+  IRenderFunction,
+  Sticky,
+  StickyPositionType,
+  ScrollablePane,
+  IDropdownOption,
+  ContextualMenu,
+  ContextualMenuItemType,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
 import DocumentViewer from "../components/DocumentViewer";
-
+import styles from "./MyRequests.module.scss"
 interface MyProps {
   sp: SPFI;
   context: any;
@@ -31,9 +47,13 @@ interface MyProps {
     projectName?: string;
     Status?: string;
     FinanceStatus?: string;
+    selectedInvoice?: number | string;
+    [key: string]: any;
   };
+
   onNavigate?: (pageKey: string, params?: any) => void;
   projectsp: SPFI;
+  getCurrentPageUrl?: () => string;
 }
 
 interface InvoiceRequest {
@@ -53,6 +73,19 @@ interface InvoiceRequest {
   POAmount?: number;
   Customer_x0020_Contact?: string;
   FinanceStatus?: string;
+  CurrentStatus?: string;
+  DueDate?: Date;
+  Currency?: string;
+  Created?: string;
+  Modified?: string;
+  Author?: {
+    Title?: string;
+    EMail?: string;
+  };
+  Editor?: {
+    Title?: string;
+    EMail?: string;
+  };
 }
 
 interface InvoicePO {
@@ -71,8 +104,9 @@ interface POHierarchy {
   childPOGroups: { childPO: InvoicePO; requests: InvoiceRequest[] }[];
   mainPORequests: InvoiceRequest[];
 }
-const steps = ["Submitted", "Not Generated", "Pending Payment", "Payment Received"];
-
+const steps = ["Request Submitted", "Not Generated", "Pending Payment", "Payment Received"];
+const spTheme = (window as any).__themeState__?.theme;
+const primaryColor = spTheme?.themePrimary || "#0078d4";
 function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps: string[] }) {
   const currentStep = steps.indexOf(currentStatus);
   return (
@@ -138,69 +172,41 @@ function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps:
   );
 }
 
-// function InvoiceDetailsCard({ item, onShowAttachment }: { item: InvoiceRequest; onShowAttachment: (url: string, name: string) => void }) {
-//   if (!item) return null;
-//   const hidePOItem = !item["POItem_x0020_Title"] && !item["POItem_x0020_Value"];
+function decodeHtmlEntities(str: string): string {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = str;
+  return txt.value;
+}
 
-//   const rows = [
-//     { label: "Purchase Order", value: item.PurchaseOrder || "-" },
-//     { label: "Project Name", value: item.ProjectName || "-" },
-//     {
-//       label: "PO Amount",
-//       value: item.POAmount != null && !isNaN(Number(item.POAmount))
-//         ? Number(item.POAmount).toLocaleString()
-//         : "-"
-//     },
-//     !hidePOItem && { label: "PO Item Title", value: item["POItem_x0020_Title"] || "-" },
-//     !hidePOItem && {
-//       label: "PO Item Value",
-//       value: item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
-//         ? Number(item["POItem_x0020_Value"]).toLocaleString()
-//         : "-"
-//     },
-//     {
-//       label: "Invoice Amount",
-//       value: item.InvoiceAmount != null && !isNaN(Number(item.InvoiceAmount))
-//         ? Number(item.InvoiceAmount).toLocaleString()
-//         : "-"
-//     },
-//     { label: "Invoice Status", value: item.Status || "-" },
-//   ].filter(Boolean) as { label: string; value: any }[];
+function formatCommentsHistory(historyJson?: string) {
+  let arr = [];
+  try {
+    if (!historyJson) return "";
 
+    // Decode any HTML entities to get valid JSON string
+    const decodedJson = decodeHtmlEntities(historyJson);
 
-//   return (
-//     <div style={{ padding: 20, maxWidth: 700, margin: "auto", backgroundColor: "white", borderRadius: 8, boxShadow: "0 0 10px rgba(0,0,0,0.1)" }}>
-//       {/* <Icon iconName="Info" style={{ fontSize: 24, color: "#1875f0" }} /> */}
-//       <h2 style={{ marginTop: 0, marginBottom: 16 }}>All Invoice Requests for {item.PurchaseOrder}</h2>
-//       <strong>All Invoice Requests for {item.PurchaseOrder}</strong>
-//       <div>
-//         {rows.map((row) => (
-//           <div key={row.label} style={{ marginBottom: 8 }}>
-//             <strong>{row.label}:</strong> {row.value}
-//           </div>
-//         ))}
-//       </div>
-//       <StatusStepper currentStatus={item.Status ?? ""} steps={steps} />
-//       {item.AttachmentFiles && item.AttachmentFiles.length > 0 && (
-//         <div style={{ marginTop: 24 }}>
-//           <h3>Attachments</h3>
-//           <ul style={{ paddingInlineStart: 20 }}>
-//             {item.AttachmentFiles.map((file) => (
-//               <li key={file.UniqueId}>
-//                 <a href="#" onClick={(e) => {
-//                   e.preventDefault();
-//                   onShowAttachment(file.ServerRelativeUrl, file.FileName);
-//                 }}>
-//                   {file.FileName}
-//                 </a>
-//               </li>
-//             ))}
-//           </ul>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
+    arr = JSON.parse(decodedJson);
+  } catch {
+    arr = [];
+  }
+  if (!Array.isArray(arr)) arr = [];
+
+  return arr
+    .map((entry: any) => {
+      const dateObj = entry.Date ? new Date(entry.Date) : null;
+      const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB') : '';
+      const timeStr = dateObj ? dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : '';
+      const user = entry.User || 'Unknown User';
+      const role = entry.Role ? ` (${entry.Role})` : '';
+      const title = entry.Title || '';
+      const comment = entry.Data || '';
+
+      // Format as: [date time] user (role) - title:\ncomment
+      return `[${dateStr} ${timeStr}]${user}${role} \n${title}: ${comment}`;
+    })
+    .join('\n\n'); // two line breaks between entries
+}
 
 function InvoiceDetailsCard({
   item,
@@ -210,90 +216,246 @@ function InvoiceDetailsCard({
   onShowAttachment: (url: string, name: string) => void;
 }) {
   if (!item) return null;
-  const hidePOItem = !item["POItem_x0020_Title"] && !item["POItem_x0020_Value"];
-
-  const detailRows = [
-    { label: "Purchase Order", value: item.PurchaseOrder || "-" },
-    { label: "Project Name", value: item.ProjectName || "-" },
-    {
-      label: "PO Amount",
-      value: item.POAmount != null && !isNaN(Number(item.POAmount))
-        ? Number(item.POAmount).toLocaleString()
-        : "-",
-    },
-    !hidePOItem && { label: "PO Item Title", value: item["POItem_x0020_Title"] || "-" },
-    !hidePOItem && {
-      label: "PO Item Value",
-      value:
-        item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
-          ? Number(item["POItem_x0020_Value"]).toLocaleString()
-          : "-",
-    },
-    {
-      label: "Invoice Amount",
-      value: item.InvoiceAmount != null && !isNaN(Number(item.InvoiceAmount))
-        ? Number(item.InvoiceAmount).toLocaleString()
-        : "-",
-    },
-    { label: "Invoice Status", value: item.Status || "-" },
-  ].filter(Boolean) as { label: string; value: any }[];
-
+  // const hideItem = !item["POItem_x0020_Title"] && !item["POItem_x0020_Value"];
+  const itemCurrency = item.Currency;
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 1100,
-        borderRadius: 14,
-        background: "white",
-        boxShadow: "0 2px 16px rgba(45,55,72,0.06)",
-        margin: "20px auto",
-        padding: 28,
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
+    <Stack
+      tokens={{ childrenGap: 20 }}
+      styles={{
+        root: {
+          // maxWidth: 900,
+          // margin: "auto",
+          padding: 10,
+          backgroundColor: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+        },
       }}
     >
-      <h2 style={{ margin: "0 0 6px 0", fontWeight: 700, fontSize: 22 }}>
-        Invoice Details <span style={{ color: "#166BDD" }}>{item.PurchaseOrder}</span>
-      </h2>
-      <div style={{ paddingBottom: 10, fontWeight: 500 }}>
-        {detailRows.map(row => (
-          <div key={row.label} style={{ margin: "0 0 2px 0", fontSize: 16 }}>
-            <span style={{ fontWeight: 600 }}>{row.label}:</span>{" "}
-            <span>{row.value}</span>
+      <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 12 }}>
+        <div style={{ width: 6, height: 48, backgroundColor: primaryColor, borderRadius: 2 }} />
+        <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor } }} />
+        <Text variant="xxLarge" styles={{ root: { fontWeight: "600", color: primaryColor } }}>
+          Invoice Details
+        </Text>
+      </Stack>
+
+      {/* <Stack horizontal wrap tokens={{ childrenGap: 40 }}>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
+            Purchase Order
+          </Text>
+          <Text variant="large">{item.PurchaseOrder || "-"}</Text>
+        </Stack>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
+            Project Name
+          </Text>
+          <Text variant="large">{item.ProjectName || "-"}</Text>
+        </Stack>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
+            PO Amount
+          </Text>
+          <Text variant="large">
+            {item.POAmount != null && !isNaN(Number(item.POAmount))
+              ? `${Number(item.POAmount).toLocaleString()}(${itemCurrency})`
+              : "-"}
+          </Text>
+        </Stack>
+      </Stack>
+
+      {!hideItem && (
+        <Stack horizontal wrap tokens={{ childrenGap: 40 }}>
+          <Stack>
+            <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
+              PO Item Title
+            </Text>
+            <Text variant="large">{item["POItem_x0020_Title"] || "-"}</Text>
+          </Stack>
+          <Stack>
+            <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
+              PO Item Value
+            </Text>
+            <Text variant="large">
+              {item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
+                ? `${Number(item["POItem_x0020_Value"]).toLocaleString()}(${itemCurrency})`
+                : "-"}
+            </Text>
+          </Stack>
+        </Stack>
+      )}
+      <Stack horizontal tokens={{ childrenGap: 32 }} styles={{ root: { marginBottom: 12 } }}>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Invoiced Amount</Text>
+          <Text variant="large">{item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "-"}(USD)</Text>
+        </Stack>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Invoice Status</Text>
+          <Text variant="large">{item.Status || "-"}</Text>
+        </Stack>
+        <Stack>
+          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Current Status</Text>
+          <Text variant="large">{item.CurrentStatus || "-"}</Text>
+        </Stack>
+      </Stack> */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px 20px",
+          marginTop: 10,
+        }}
+      >
+
+        {/* Reusable info cell */}
+        {[
+          { label: "Purchase Order:", value: item.PurchaseOrder || "-" },
+          { label: "Project Name:", value: item.ProjectName || "-" },
+          {
+            label: "PO Item Title:",
+            value: item["POItem_x0020_Title"] || "-",
+          },
+          {
+            label: "PO Item Value:",
+            value: item["POItem_x0020_Value"]
+              ? `${Number(item["POItem_x0020_Value"]).toLocaleString()} (${itemCurrency})`
+              : "-",
+          },
+          {
+            label: "Invoiced Amount:",
+            value: item.InvoiceAmount
+              ? `${item.InvoiceAmount.toLocaleString()} (${itemCurrency})`
+              : "-",
+          },
+          {
+            label: "Invoice Status:",
+            value: (
+              <span
+                style={{
+                  fontWeight: 600,
+                }}
+              >
+                {item.Status || "-"}
+              </span>
+            ),
+          },
+          {
+            label: "Current Status:",
+            value: item.CurrentStatus || "-",
+          },
+          {
+            label: "Due Date:",
+            value: item.DueDate ? new Date(item.DueDate).toLocaleDateString() : "N/A",
+          },
+        ].map((field, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "110px 1fr",
+              padding: "10px 14px",
+              background: "#fafafa",
+              border: "1px solid #eee",
+              borderRadius: 8,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+              alignItems: "center",
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: primaryColor }}>{field.label}</span>
+            <span style={{ fontSize: 14, wordBreak: "break-word" }}>{field.value}</span>
           </div>
         ))}
       </div>
-      <div style={{ margin: "18px 0" }}>
-        <StatusStepper currentStatus={item.Status ?? ""} steps={steps} />
-      </div>
+
+      <Separator styles={{ root: { marginTop: 5, marginBottom: 5 } }} />
+
+      {
+        item.PMCommentsHistory && formatCommentsHistory(item.PMCommentsHistory).trim() !== "" && (
+          <Stack>
+            <Text variant="mediumPlus" styles={{ root: { fontWeight: '600' } }}>PM Comments</Text>
+            <div style={{
+              maxHeight: 180,
+              overflowY: "auto",
+              backgroundColor: "#f3f2f1",
+              borderRadius: 6,
+              padding: 12,
+            }}>
+              <pre style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                margin: 0,
+                fontSize: 14,
+                fontFamily: "Segoe UI",
+                color: "#333",
+              }}>
+                {formatCommentsHistory(item.PMCommentsHistory)}
+              </pre>
+            </div>
+          </Stack>
+        )
+      }
+
+      {
+        item.FinanceCommentsHistory && formatCommentsHistory(item.FinanceCommentsHistory).trim() !== "" && (
+          <Stack>
+            <Text variant="mediumPlus" styles={{ root: { fontWeight: '600' } }}>Finance Comments</Text>
+            <div style={{
+              maxHeight: 180,
+              overflowY: "auto",
+              backgroundColor: "#f3f2f1",
+              borderRadius: 6,
+              padding: 12,
+            }}>
+              <pre style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                margin: 0,
+                fontSize: 14,
+                fontFamily: "Segoe UI",
+                color: "#333",
+              }}>
+                {formatCommentsHistory(item.FinanceCommentsHistory)}
+              </pre>
+            </div>
+          </Stack>
+        )
+      }
+
+      {/* Attachments */}
       {item.AttachmentFiles && item.AttachmentFiles.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          <strong>Attachments</strong>
-          <ul style={{ paddingInlineStart: 18, margin: "7px 0" }}>
-            {item.AttachmentFiles.map(file => (
-              <li key={file.UniqueId} style={{ margin: "3px 0" }}>
+        <Stack>
+          <Text variant="mediumPlus" block styles={{ root: { marginTop: 16, fontWeight: '600' } }}>
+            Attachments
+          </Text>
+          <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+            {item.AttachmentFiles.map((file) => (
+              <li key={file.UniqueId} style={{ marginBottom: 6 }}>
                 <a
                   href="#"
-                  onClick={e => {
+                  onClick={(e) => {
                     e.preventDefault();
-                    onShowAttachment(file.ServerRelativeUrl, file.FileName);
+                    onShowAttachment(file.ServerRelativeUrl, file.Name || file.FileName);
                   }}
-                  style={{ color: "#166BDD", textDecoration: "underline" }}
+                  style={{ color: "#0078d4", textDecoration: "underline" }}
                 >
-                  {file.FileName}
+                  {file.Name || file.FileName}
                 </a>
               </li>
             ))}
           </ul>
-        </div>
+        </Stack>
       )}
-    </div>
+
+      <div style={{ marginTop: 24 }}>
+        <StatusStepper currentStatus={item.Status ?? ""} steps={steps} />
+      </div>
+    </Stack>
   );
 }
 
-export default function MyRequests({ sp, projectsp, context, initialFilters }: MyProps) {
+export default function MyRequests({ sp, projectsp, context, initialFilters, getCurrentPageUrl }: MyProps) {
   const [invoicePOs, setInvoicePOs] = useState<InvoicePO[]>([]);
   const [invoiceRequests, setInvoiceRequests] = useState<InvoiceRequest[]>([]);
   const [poHierarchy, setPOHierarchy] = useState<null | {
@@ -306,9 +468,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
   const [selectedPOItem, setSelectedPOItem] = useState<{ POID: string; POAmount: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showHierPanel, setShowHierPanel] = useState(false);
-  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
-  const [viewerName, setViewerName] = useState<string | null>(null);
   const [showClarifyPanel, setShowClarifyPanel] = useState(false);
   const [clarifyInvoiceAmount, setClarifyInvoiceAmount] = useState<number | undefined>();
   const [clarifyCustomerContact, setClarifyCustomerContact] = useState<string | undefined>();
@@ -316,34 +475,186 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
   const [clarifyLoading, setClarifyLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filterProjectName, setFilterProjectName] = useState<string | undefined>(undefined);
-  const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
-  const [filterFinanceStatus, setFilterFinanceStatus] = useState<string | undefined>(undefined);
-  const [projectOptions, setProjectOptions] = useState<string[]>([]);
-  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  // const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+  // const [filterFinanceStatus, setFilterFinanceStatus] = useState<string | undefined>(undefined);
+  const [, setProjectOptions] = useState<string[]>([]);
+  const [, setStatusOptions] = useState<string[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [dialogMessage, setDialogMessage] = useState("");
   const [dialogType, setDialogType] = useState<"success" | "error">("success");
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
-  const toDropdownOptions = (items: string[]): IDropdownOption[] => [
-    { key: "All", text: "All" },
-    ...items.map(item => ({ key: item, text: item }))
+  const [showHierPanel, setShowHierPanel] = useState(false); // main panel
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null); // viewer panel
+  const [viewerName, setViewerName] = useState<string | null>(null);
+  // const [, setSortedInvoiceRequests] = React.useState<InvoiceRequest[]>(invoiceRequests);
+  const [sortedFilteredItems, setSortedFilteredItems] = React.useState<any[]>([]);
+  const [filterCurrentStatus, setFilterCurrentStatus] = useState<string | undefined>(undefined); // uses CurrentStatus field
+  const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string | undefined>(undefined);   // uses Status field
+  const [filterFinanceStatus, setFilterFinanceStatus] = useState<string | undefined>(undefined);
+  const [sortedColumnKey, ] = React.useState<string | null>(null);
+  const [isSortedDescending, ] = React.useState<boolean>(false);
+
+  const menuItems = [
+    {
+      key: 'asc',
+      text: 'Sort A to Z',
+      iconProps: { iconName: 'SortUp' },
+      onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc'),
+      // onClick: () => sortColumn(selectedColumn.fieldName, direction),
+    },
+    {
+      key: 'desc',
+      text: 'Sort Z to A',
+      iconProps: { iconName: 'SortDown' },
+      onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc'),
+      // onClick: () => sortColumn(selectedColumn.fieldName, direction),
+    },
+    { key: 'divider', itemType: ContextualMenuItemType.Divider },
   ];
+
+  // const onColumnClick = (ev?: React.MouseEvent<HTMLElement>, column?: IColumn): void => {
+  //   if (!column) return;
+
+  //   const newIsSortedDescending = sortedColumnKey === column.key ? !isSortedDescending : false;
+  //   setSortedColumnKey(column.key);
+  //   setIsSortedDescending(newIsSortedDescending);
+
+  //   const sorted = _copyAndSort(filteredInvoiceRequests, column.fieldName || column.key, newIsSortedDescending);
+  //   setSortedInvoiceRequests(sorted);
+  // };
+
+  const [columnFilterMenu, setColumnFilterMenu] = useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({
+    visible: false,
+    target: null,
+    columnKey: null,
+  });
+  // const [items, setItems] = useState<InvoiceRequest[]>(invoiceRequests); // or whatever your main data is
+
+  const dropdownStyles: Partial<IDropdownStyles> = {
+    dropdown: { width: 300 }, // makes the box wider
+    callout: { minWidth: 350 }, // dropdown popup wider
+    dropdownItem: {
+      whiteSpace: 'normal',
+      textOverflow: 'clip',
+      overflow: 'visible',
+      maxWidth: 'none'
+    },
+    dropdownItemSelected: {
+      whiteSpace: 'normal',
+      textOverflow: 'clip',
+      overflow: 'visible',
+      maxWidth: 'none'
+    }
+  };
+
+  const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
+    const sortedItems = [...sortedFilteredItems].sort((a, b) => {
+
+      let aVal = (a as any)[columnKey];
+      let bVal = (b as any)[columnKey];
+
+      // Handle null/undefined
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // Handle Date objects
+      if (aVal instanceof Date) aVal = aVal.getTime();
+      if (bVal instanceof Date) bVal = bVal.getTime();
+      console.log(`Sorting by ${columnKey}`, aVal, bVal);
+
+      // Number comparison (after Date conversion)
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      // Try parsing as date strings if not a number
+      const aAsDate = Date.parse(aVal);
+      const bAsDate = Date.parse(bVal);
+      if (!isNaN(aAsDate) && !isNaN(bAsDate)) {
+        return direction === 'asc' ? aAsDate - bAsDate : bAsDate - aAsDate;
+      }
+
+      // Default to string comparison
+      const aStr = aVal.toString();
+      const bStr = bVal.toString();
+      return direction === 'asc'
+        ? aStr.localeCompare(bStr)
+        : bStr.localeCompare(aStr);
+    });
+
+    setSortedFilteredItems(sortedItems);
+    setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+  };
+
+  const onColumnHeaderClick = (
+    ev?: React.MouseEvent<HTMLElement>,
+    column?: IColumn
+  ) => {
+    if (!column || !ev?.currentTarget) return;
+
+    // Prevent immediate sorting, show sorting menu instead
+    setColumnFilterMenu({
+      visible: true,
+      target: ev.currentTarget as HTMLElement,
+      columnKey: column.key,
+    });
+  };
+
+  const handleExportToExcel = (): void => {
+    // Copy your data to a JSON array in the format for export
+    const exportData = filteredInvoiceRequests.map(item => ({
+      Id: item.Id,
+      Title: item.Title,
+      Status: item.Status,
+      PurchaseOrder: item.PurchaseOrder,
+      ProjectName: item.ProjectName,
+      InvoiceAmount: item.InvoiceAmount,
+      POItemTitle: item.POItem_x0020_Title,
+      POItemValue: item.POItem_x0020_Value,
+      PMCommentsHistory: item.PMCommentsHistory,
+      FinanceCommentsHistory: item.PMCommentsHistory,
+      POAmount: item.POAmount,
+      Customer_x0020_Contact: item.Customer_x0020_Contact,
+      CurrentStatus: item.CurrentStatus,
+      DueDate: item.DueDate,
+      Currency: item.Currency,
+      AttachmentFiles: item.AttachmentFiles,
+      Created: item.Created,
+      Modified: item.Modified,
+    }))
+
+    // Convert JSON to worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Create a new workbook and append the worksheet
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'InvoiceRequests');
+
+    // Write workbook and convert to binary
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+    // Save file using file-saver
+    const fileName = `InvoiceRequests_${new Date().toISOString()}.xlsx`;
+    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), fileName);
+  };
 
   // Columns for Invoice requests list:
   const invoiceColumns: IColumn[] = [
     // { key: "Title", name: "Title", fieldName: "Title", minWidth: 170, maxWidth: 270, isResizable: true },
-    { key: "PurchaseOrder", name: "POID", fieldName: "PurchaseOrder", minWidth: 100, maxWidth: 160, isResizable: true },
-    { key: "ProjectName", name: "Project", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true },
+    { key: "PurchaseOrder", name: "POID", fieldName: "PurchaseOrder", minWidth: 100, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick, },
+    { key: "ProjectName", name: "Project", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
-      key: "Finance Status",
+      key: "CurrentStatus",
       name: "Current Status",
-      fieldName: "FinanceStatus",
+      fieldName: "CurrentStatus",
       minWidth: 120,
       maxWidth: 160,
       isResizable: true,
-      onRender: (item) => item.FinanceStatus || "-"
+      onRender: (item) => item.CurrentStatus || "-",
+      onColumnClick: onColumnHeaderClick
     },
-    { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true },
+    { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
       key: "POItem_x0020_Title",
       name: "PO Item Title",
@@ -351,7 +662,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       minWidth: 150,
       maxWidth: 220,
       isResizable: true,
-      onRender: item => item["POItem_x0020_Title"] || "-"
+      onRender: item => item["POItem_x0020_Title"] || "-",
+      onColumnClick: onColumnHeaderClick
     },
     {
       key: "POItem_x0020_Value",
@@ -363,17 +675,60 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       onRender: (item) =>
         item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
           ? Number(item["POItem_x0020_Value"]).toLocaleString()
-          : "-"
+          : "-",
+      onColumnClick: onColumnHeaderClick
     },
     {
       key: "InvoiceAmount",
-      name: "Invoice Amount",
+      name: "Invoiced Amount",
       fieldName: "InvoiceAmount",
       minWidth: 150,
       maxWidth: 160,
       isResizable: true,
       onRender: (item) => item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "",
+      onColumnClick: onColumnHeaderClick
     },
+    {
+      key: "Created",
+      name: "Created",
+      fieldName: "Created",
+      minWidth: 130,
+      maxWidth: 180,
+      isResizable: true,
+      onRender: item => item.Created ? new Date(item.Created).toLocaleDateString() : "-",
+      onColumnClick: onColumnHeaderClick
+    },
+    {
+      key: "Author",
+      name: "Created By",
+      fieldName: "Author",
+      minWidth: 160,
+      maxWidth: 200,
+      isResizable: true,
+      onRender: item => item.Author?.Title || "-",
+      onColumnClick: onColumnHeaderClick
+    },
+    {
+      key: "Modified",
+      name: "Modified",
+      fieldName: "Modified",
+      minWidth: 130,
+      maxWidth: 180,
+      isResizable: true,
+      onRender: item => item.Modified ? new Date(item.Modified).toLocaleDateString() : "-",
+      onColumnClick: onColumnHeaderClick
+    },
+    {
+      key: "Editor",
+      name: "Modified By",
+      fieldName: "Editor",
+      minWidth: 160,
+      maxWidth: 200,
+      isResizable: true,
+      onRender: item => item.Editor?.Title || "-",
+      onColumnClick: onColumnHeaderClick
+    },
+
   ];
 
   // Columns for PO items:
@@ -395,7 +750,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
     { key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 140, maxWidth: 160, isResizable: true },
     {
       key: "InvoiceAmount",
-      name: "Invoice Amount",
+      name: "Invoiced Amount",
       fieldName: "InvoiceAmount",
       minWidth: 150,
       maxWidth: 160,
@@ -403,6 +758,61 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       onRender: (item) => item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "",
     },
     { key: "Invoice Status", name: "Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true },
+    {
+      key: "Created",
+      name: "Created",
+      fieldName: "Created",
+      minWidth: 130,
+      maxWidth: 180,
+      isResizable: true,
+      onRender: item => item.Created ? new Date(item.Created).toLocaleDateString() : "-"
+    },
+    {
+      key: "Author",
+      name: "Created By",
+      fieldName: "Author",
+      minWidth: 160,
+      maxWidth: 200,
+      isResizable: true,
+      onRender: item => item.Author?.Title || "-"
+    },
+    {
+      key: "Modified",
+      name: "Modified",
+      fieldName: "Modified",
+      minWidth: 130,
+      maxWidth: 180,
+      isResizable: true,
+      onRender: item => item.Modified ? new Date(item.Modified).toLocaleDateString() : "-"
+    },
+    {
+      key: "Editor",
+      name: "Modified By",
+      fieldName: "Editor",
+      minWidth: 160,
+      maxWidth: 200,
+      isResizable: true,
+      onRender: item => item.Editor?.Title || "-"
+    },
+    {
+      key: "PMCommentsHistory",
+      name: "PM Comments History",
+      fieldName: "PMCommentsHistory",
+      minWidth: 200,
+      maxWidth: 350,
+      isResizable: true,
+      onRender: item => formatCommentsHistory(item.PMCommentsHistory)
+    },
+    {
+      key: "FinanceCommentsHistory",
+      name: "Finance Comments History",
+      fieldName: "FinanceCommentsHistory",
+      minWidth: 200,
+      maxWidth: 350,
+      isResizable: true,
+      onRender: item => formatCommentsHistory(item.FinanceCommentsHistory)
+    },
+
   ];
 
   const [selection] = useState(
@@ -414,15 +824,63 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
     })
   );
   const [clearCounter, setClearCounter] = useState(0);
+  const projectOptions = React.useMemo(() => {
+    return Array.from(new Set(
+      invoiceRequests
+        .filter(item => {
+          const matchesCurrentStatus = !filterCurrentStatus || filterCurrentStatus === "All"
+            ? true : item.CurrentStatus === filterCurrentStatus;
+          const matchesInvoiceStatus = !filterInvoiceStatus || filterInvoiceStatus === "All"
+            ? true : item.Status === filterInvoiceStatus;
+          return matchesCurrentStatus && matchesInvoiceStatus;
+        })
+        .map(item => item.ProjectName)
+        .filter(Boolean)
+    ));
+  }, [invoiceRequests, filterCurrentStatus, filterInvoiceStatus]);
+
+  const currentStatusOptions: IDropdownOption[] = React.useMemo(() => {
+    const uniqueStatuses = Array.from(new Set(invoiceRequests.map(r => r.CurrentStatus).filter(Boolean)));
+    return [
+      { key: "All", text: "All" },  // optional 'All' option
+      ...uniqueStatuses.map(status => ({
+        key: status,
+        text: status,
+      })),
+    ];
+  }, [invoiceRequests]);
+
+
+  const invoiceStatusOptions = React.useMemo(() => {
+    return Array.from(new Set(
+      invoiceRequests
+        .filter(item => {
+          const matchesProject = !filterProjectName || filterProjectName === "All"
+            ? true : item.ProjectName === filterProjectName;
+          const matchesCurrentStatus = !filterCurrentStatus || filterCurrentStatus === "All"
+            ? true : item.CurrentStatus === filterCurrentStatus;
+          return matchesProject && matchesCurrentStatus;
+        })
+        .map(item => item.Status)
+        .filter(Boolean)
+    ));
+  }, [invoiceRequests, filterProjectName, filterCurrentStatus]);
 
   const clearAllFilters = () => {
     setSearchText("");
     setFilterProjectName("All");
-    setFilterStatus("All");
+    setFilterCurrentStatus("All");
+    setFilterInvoiceStatus("All");
     setFilterFinanceStatus("All");
     setClearCounter(clearCounter + 1);
   };
 
+  const isClearDisabled =
+    !searchText &&
+    (filterProjectName === "All" || !filterProjectName) &&
+    (filterInvoiceStatus === "All" || !filterInvoiceStatus) &&
+    (filterCurrentStatus === "All" || !filterCurrentStatus) &&
+    (filterFinanceStatus === "All" || !filterFinanceStatus);
 
   useEffect(() => {
     async function loadData() {
@@ -430,7 +888,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       try {
         const [pos, reqs] = await Promise.all([
           sp.web.lists.getByTitle("InvoicePO").items(),
-          sp.web.lists.getByTitle("Invoice Requests").items.select("*").expand("AttachmentFiles")(),
+          sp.web.lists.getByTitle("Invoice Requests").items.select("*", "Author/Title", "Author/EMail", "Editor/Title", "Editor/EMail").expand("AttachmentFiles", "Author", "Editor")(),
         ]);
         setInvoicePOs(pos);
         setInvoiceRequests(reqs);
@@ -450,8 +908,9 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
     if (initialFilters) {
       if (initialFilters.searchText !== undefined) setSearchText(initialFilters.searchText);
       if (initialFilters.projectName !== undefined) setFilterProjectName(initialFilters.projectName);
-      if (initialFilters.Status !== undefined) setFilterStatus(initialFilters.Status);
+      if (initialFilters.Status !== undefined) setFilterInvoiceStatus(initialFilters.Status);
       if (initialFilters.FinanceStatus !== undefined) setFilterFinanceStatus(initialFilters.FinanceStatus);
+      if (initialFilters.CurrentStatus !== undefined) setFilterCurrentStatus(initialFilters.CurrentStatus);
     }
     // empty dep array if initialFilters won't change after mount
   }, [initialFilters]);
@@ -459,11 +918,12 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
   useEffect(() => {
     console.log("Filters set from initialFilters:", {
       searchText,
-      filterProjectName,
-      filterStatus,
       filterFinanceStatus,
+      filterProjectName,
+      filterInvoiceStatus,
+      filterCurrentStatus,
     });
-  }, [searchText, filterProjectName, filterStatus, filterFinanceStatus]);
+  }, [searchText, filterProjectName, filterInvoiceStatus, filterCurrentStatus, filterFinanceStatus]);
 
   useEffect(() => {
     if (selectedReq?.ProjectName) {
@@ -472,6 +932,123 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       setSelectedProject(null);
     }
   }, [selectedReq]);
+
+  // Add this in main component mount useEffect:
+  // useEffect(() => {
+  //   const searchParams = new URLSearchParams(window.location.search);
+  //   const selectedInvoiceId = searchParams.get('selectedInvoice');
+
+  //   if (selectedInvoiceId) {
+  //     // Fetch and open the invoice as usual!
+  //     fetchInvoiceRequestById(sp, Number(selectedInvoiceId)).then((invoice) => {
+  //       if (invoice) {
+  //         setSelectedReq(invoice);
+  //         setShowHierPanel(true);
+  //       }
+  //     });
+  //   }
+  // }, []);
+
+  // useEffect(() => {
+  //   // Run only once on mount or when initialFilters is available
+  //   async function loadSelectedInvoice() {
+  //     // Check if selectedInvoice is present (could be from props or URL)
+  //     const searchParams = new URLSearchParams(window.location.search);
+  //     const selectedInvoiceId = searchParams.get("selectedInvoice");
+  //     if (selectedInvoiceId) {
+  //       try {
+  //         // Fetch the invoice by ID using your fetching function
+  //         const invoice = await fetchInvoiceRequestById(sp, Number(selectedInvoiceId));
+  //         if (invoice) {
+  //           setSelectedReq(invoice);       // Set selected invoice state
+  //           setShowHierPanel(true);        // Open the details panel
+  //         }
+  //       } catch (error) {
+  //         console.error("Failed to load invoice on link open:", error);
+  //       }
+  //     }
+  //   }
+
+  //   loadSelectedInvoice();
+  // }, [sp]); // Add more dependencies if needed (e.g. initialFilters, sp context)
+
+  useEffect(() => {
+    const loadSelectedInvoiceFromUrl = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const selectedInvoiceId = searchParams.get('selectedInvoice');
+      if (selectedInvoiceId) {
+        try {
+          const invoiceIdNum = Number(selectedInvoiceId);
+          if (!isNaN(invoiceIdNum)) {
+            // Fetch the invoice request
+            const invoice = await fetchInvoiceRequestById(sp, invoiceIdNum);
+            if (invoice) {
+              // Call manual selection handler to initialize all related state correctly
+              await onInvoiceRequestSelect(invoice);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading invoice from URL', error);
+        }
+      }
+    };
+    loadSelectedInvoiceFromUrl();
+  }, [sp, onInvoiceRequestSelect]);
+
+
+
+  useEffect(() => {
+    async function loadSelectedInvoice() {
+      if (initialFilters?.selectedInvoice) {
+        const invoiceId = Number(initialFilters.selectedInvoice);
+        if (invoiceId) {
+          try {
+            const invoice = await fetchInvoiceRequestById(sp, invoiceId);
+            if (invoice) {
+              setSelectedReq(invoice);
+              setShowHierPanel(true);
+            }
+          } catch (error) {
+            console.error("Failed to load invoice", error);
+          }
+        }
+      }
+    }
+    loadSelectedInvoice();
+  }, [initialFilters]);
+
+  const filteredItems = React.useMemo(() => {
+    const searchLower = searchText?.toLowerCase().trim() || "";
+    return invoiceRequests.filter(item => {
+      const matchesSearch = !searchLower || Object.values(item).some(val =>
+        val !== undefined && val !== null && val.toString().toLowerCase().includes(searchLower)
+      );
+      const matchesFinanceStatus = !filterFinanceStatus || filterFinanceStatus === "All"
+        ? true
+        : item.FinanceStatus === filterFinanceStatus;
+      const matchesProject = !filterProjectName || filterProjectName === "All"
+        ? true : item.ProjectName === filterProjectName;
+
+      const matchesCurrentStatus = !filterCurrentStatus || filterCurrentStatus === "All"
+        ? true : item.CurrentStatus === filterCurrentStatus;
+
+      const matchesInvoiceStatus = !filterInvoiceStatus || filterInvoiceStatus === "All"
+        ? true : item.Status === filterInvoiceStatus;
+
+      return matchesSearch && matchesProject && matchesCurrentStatus && matchesInvoiceStatus && matchesFinanceStatus;
+    });
+  }, [invoiceRequests, searchText, filterProjectName, filterCurrentStatus, filterInvoiceStatus, filterFinanceStatus]);
+
+  React.useEffect(() => {
+    if (!filteredItems) return;
+    const sorted = _copyAndSort(
+      filteredItems,
+      sortedColumnKey ?? 'PurchaseOrder', // default sort key
+      isSortedDescending
+    );
+    setSortedFilteredItems(sorted);
+  }, [filteredItems, sortedColumnKey, isSortedDescending]);
+
 
   async function loadProject(projectName?: string) {
     if (!projectName) {
@@ -494,11 +1071,87 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
     }
   }
 
+  async function fetchInvoiceRequestById(sp: SPFI, id: number): Promise<InvoiceRequest | null> {
+    try {
+      const item = await sp.web.lists
+        .getByTitle("Invoice Requests")
+        .items.getById(id)
+        .select(
+          "Id",
+          "PurchaseOrder",
+          "InvoiceAmount",
+          "Comments",
+          "Customer_x0020_Contact",
+          "POItem_x0020_Title",
+          "POItem_x0020_Value",
+          "ProjectName",
+          "Status",
+          "PMCommentsHistory",
+          "FinanceCommentsHistory",
+          "Created",
+          "Author/Title",
+          "Modified",
+          "Editor/Title"
+        )
+        .expand("Author", "Editor")();
+
+      return {
+        Id: item.Id,
+        Title: item.Title || "",                      // Add Title if required
+        PurchaseOrderId: item.PurchaseOrder || "",   // mapped to PurchaseOrderId as interface expects
+        PurchaseOrder: item.PurchaseOrder,            // include any other that are in interface
+        POAmount: item.InvoiceAmount,
+        Status: item.Status,
+        ProjectName: item.ProjectName,
+        POItem_x0020_Title: item.POItem_x0020_Title,           // Use "POItemx0020Title" not "POItem_x0020_Title"
+        POItem_x0020_Value: item.POItem_x0020_Value,           // Use correct casing as in SP
+        Customer_x0020_Contact: item.Customer_x0020_Contact,
+        PMCommentsHistory: item.PMCommentsHistory,
+        FinanceCommentsHistory: item.FinanceCommentsHistory,
+        Created: item.Created,
+        Author: item.Author?.Title || "",
+        Modified: item.Modified,
+        Editor: item.Editor?.Title || ""
+      };
+
+    } catch (error) {
+      console.error("Error fetching invoice request by ID", error);
+      return null;
+    }
+  }
+
+  function _copyAndSort<T>(items: T[], columnKey: string, isSortedDescending?: boolean): T[] {
+    return items.slice().sort((a, b) => {
+      const aVal = (a as any)[columnKey];
+      const bVal = (b as any)[columnKey];
+
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        const comparison = aVal.localeCompare(bVal);
+        return isSortedDescending ? -comparison : comparison;
+      }
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return isSortedDescending ? bVal - aVal : aVal - bVal;
+      }
+
+      if (aVal instanceof Date && bVal instanceof Date) {
+        return isSortedDescending ? bVal.getTime() - aVal.getTime() : aVal.getTime() - bVal.getTime();
+      }
+
+      return 0;
+    });
+  }
+
+
   function findMainPO(request: InvoiceRequest, allPOs: InvoicePO[]): InvoicePO | undefined {
     let po = allPOs.find((p) => p.POID === request.PurchaseOrder);
     while (po && po.ParentPOID) {
       po = allPOs.find((p) => p.POID === po.ParentPOID);
     }
+    console.log(po)
     return po;
   }
 
@@ -512,44 +1165,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       Comments: g.poItem.Comments || "",               // Optional, use as Description or Comments
     }));
   }
-
-
-  function decodeHtmlEntities(str: string): string {
-    const txt = document.createElement("textarea");
-    txt.innerHTML = str;
-    return txt.value;
-  }
-
-  function formatCommentsHistory(historyJson?: string) {
-    let arr = [];
-    try {
-      if (!historyJson) return "";
-
-      // Decode any HTML entities to get valid JSON string
-      const decodedJson = decodeHtmlEntities(historyJson);
-
-      arr = JSON.parse(decodedJson);
-    } catch {
-      arr = [];
-    }
-    if (!Array.isArray(arr)) arr = [];
-
-    return arr
-      .map((entry: any) => {
-        const dateObj = entry.Date ? new Date(entry.Date) : null;
-        const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB') : '';
-        const timeStr = dateObj ? dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : '';
-        const user = entry.User || 'Unknown User';
-        const role = entry.Role ? ` (${entry.Role})` : '';
-        const title = entry.Title || '';
-        const comment = entry.Data || '';
-
-        // Format as: [date time] user (role) - title:\ncomment
-        return `[${dateStr} ${timeStr}]${user}${role} \n${title}: ${comment}`;
-      })
-      .join('\n\n'); // two line breaks between entries
-  }
-
 
   async function handleClarifySubmit() {
     setClarifyLoading(true);
@@ -584,10 +1199,11 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
           PMStatus: "Submitted",
           FinanceStatus: "Pending",
           Customer_x0020_Contact: clarifyCustomerContact,
+          CurrentStatus: `Clarified by ${userRole}`
         });
 
       setShowClarifyPanel(false);
-
+      setShowHierPanel(false);
       setDialogType("success");
       setDialogMessage("Clarification submitted successfully!");
       setDialogVisible(true);
@@ -686,7 +1302,10 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
         (!req["POItem_x0020_Title"] ||
           !lineItems.some((li) => li.POID === req["POItem_x0020_Title"]))
     );
-
+    console.log("Building hierarchy for main PO:", mainPO);
+    console.log("lineItemGroups");
+    console.log("childPOGroups");
+    console.log("mainPORequests");
     return { mainPO, lineItemGroups, childPOGroups, mainPORequests };
   }
 
@@ -700,6 +1319,18 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       return acc.concat(mapped);
     }, []);
   }
+
+
+  const onRenderDetailsHeader: IRenderFunction<IDetailsHeaderProps> = (props, defaultRender) => {
+    if (!props) {
+      return null;
+    }
+    return (
+      <Sticky stickyPosition={StickyPositionType.Header}>
+        {defaultRender!({ ...props })}
+      </Sticky>
+    );
+  };
 
   function flattenRequestsLine(groups: any[], keyProperty: string, keyValueProp: string) {
     return groups.reduce((acc: any[], group) => {
@@ -812,12 +1443,11 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
       val.toString().toLowerCase().includes(searchLower)
     );
     const matchesProject = !filterProjectName || filterProjectName === "All" || item.ProjectName === filterProjectName;
-    const matchesStatus = !filterStatus || filterStatus === "All" || item.Status === filterStatus;
-    const matchesFinanceStatus = !filterFinanceStatus || filterFinanceStatus === "All" || item.FinanceStatus === filterFinanceStatus;
+    const matchesInvoiceStatus = !filterInvoiceStatus || filterInvoiceStatus === "All" || item.Status === filterInvoiceStatus;
+    const matchesCurrentStatus = !filterCurrentStatus || filterCurrentStatus === "All" || item.CurrentStatus === filterCurrentStatus;
 
-    return matchesSearch && matchesProject && matchesStatus && matchesFinanceStatus;
+    return matchesSearch && matchesProject && matchesInvoiceStatus && matchesCurrentStatus;
   });
-
 
   async function onInvoiceRequestSelect(item?: InvoiceRequest) {
     if (item) {
@@ -836,6 +1466,12 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
             .then(items => items[0]);
 
           setSelectedProject(project || null);
+
+          const baseUrl = getCurrentPageUrl ? getCurrentPageUrl() : window.location.href; URL
+          const newUrl = `${baseUrl}#myrequests?selectedInvoice=${item.Id}`;
+          window.history.replaceState(null, '', newUrl);
+
+
         } catch (error) {
           console.error("Failed to load project", error);
           setSelectedProject(null);
@@ -873,7 +1509,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
         setSelectedPOItem(null);
       }
     } else {
-      // Clear everything if no item selected
+
       setSelectedReq(null);
       setSelectedProject(null);
       setPOHierarchy(null);
@@ -891,92 +1527,160 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
   }
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: 16 }} className="rootContainer">
       <h2>My Invoice Requests</h2>
       {error && <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>}
-      <Stack horizontal tokens={{ childrenGap: 12 }} verticalAlign="end" styles={{ root: { marginBottom: 12 } }}>
-        <div>
-          <Label>Search</Label>
-          <TextField
-            placeholder="Search"
-            value={searchText}
-            onChange={(e, val) => setSearchText(val || "")}
-            styles={{ root: { width: 320 } }}  // Double length
-          />
-        </div>
-        <div>
-          <Label>Project Name</Label>
-          <Dropdown
+      <div className={styles.filterAndHeaderSection}>
+        <Stack horizontal tokens={{ childrenGap: 12 }} verticalAlign="end" styles={{ root: { marginBottom: 12 } }}>
+          <div>
+            <Label>Search</Label>
+            <TextField
+              placeholder="Search"
+              value={searchText}
+              onChange={(e, val) => setSearchText(val || "")}
+              styles={{ root: { width: 320 } }}  // Double length
+            />
+          </div>
+          <div>
+            {/* <Label>Project Name</Label> */}
+            {/* <Dropdown
             placeholder="Project Name"
             options={toDropdownOptions(projectOptions)}
             selectedKey={filterProjectName || undefined}
             onChange={(e, option) => setFilterProjectName(option?.key as string || "All")}
             styles={{ root: { width: 160 } }}
             ariaLabel="Project Name"
-          />
-        </div>
-        <div>
-          <Label>Current Status</Label>
-          <Dropdown
-            placeholder="Current Status"
-            options={toDropdownOptions(
-              Array.from(new Set(invoiceRequests.map(r => r.FinanceStatus).filter(Boolean)))
-            )}
-            selectedKey={filterFinanceStatus || undefined}
-            onChange={(e, option) => setFilterFinanceStatus(option?.key as string || "All")}
-            styles={{ root: { width: 160 } }}
-            ariaLabel="Current Status"
-          />
-        </div>
-        <div>
-          <Label>Invoice Status</Label>
-          <Dropdown
+          /> */}
+            <Dropdown
+              label="Project Name"
+              options={[{ key: "All", text: "All" }, ...projectOptions.map(proj => ({ key: proj, text: proj }))]}
+              selectedKey={filterProjectName ?? "All"}
+              onChange={(e, option) => setFilterProjectName(option?.key === "All" ? undefined : option?.key as string)}
+              placeholder="Project Name"
+              styles={dropdownStyles}
+            />
+          </div>
+          <div>
+            {/* <Label>Current Status</Label> */}
+            <Dropdown
+              label="Current Status"
+              options={currentStatusOptions}
+              selectedKey={filterCurrentStatus ?? "All"}
+              onChange={(e, option) => setFilterCurrentStatus(option?.key as string)}
+              placeholder="Current Status"
+              styles={dropdownStyles}
+            />
+          </div>
+          <div>
+            {/* <Label>Invoice Status</Label> */}
+            {/* <Dropdown
             placeholder="Invoice Status"
             options={toDropdownOptions(statusOptions)}
             selectedKey={filterStatus || undefined}
             onChange={(e, option) => setFilterStatus(option?.key as string || "All")}
             styles={{ root: { width: 160 } }}
             ariaLabel="Invoice Status"
+          /> */}
+            <Dropdown
+              label="Invoice Status"
+              options={[{ key: "All", text: "All" }, ...invoiceStatusOptions.map(status => ({ key: status, text: status }))]}
+              selectedKey={filterInvoiceStatus ?? "All"}
+              onChange={(e, option) => setFilterInvoiceStatus(option?.key === "All" ? undefined : option?.key as string)}
+              placeholder="Invoice Status"
+              styles={dropdownStyles}
+            />
+          </div>
+          <div>
+            <PrimaryButton
+              text="Clear"
+              onClick={clearAllFilters}
+              style={{ alignSelf: "center", marginLeft: 20 }}
+              disabled={isClearDisabled}
+            />
+          </div>
+          <IconButton
+            iconProps={{ iconName: 'ExcelDocument' }}
+            title="Export to Excel"
+            ariaLabel="Export to Excel"
+            onClick={handleExportToExcel}
           />
-        </div>
-        <div>
-          <PrimaryButton
-            text="Clear"
-            onClick={clearAllFilters}
-            style={{ alignSelf: "center", marginLeft: 20 }}
-            disabled={searchText === "" && 
-              (filterProjectName === "All" || !filterProjectName) && 
-              (filterStatus === "All" || !filterStatus) && 
-              (filterFinanceStatus === "All" || !filterFinanceStatus)
-            }
-          />
-        </div>
-      </Stack>
-
-
+        </Stack>
+      </div>
       {loading ? (
         <Spinner label="Loading..." />
       ) : (
         <>
-          <DetailsList
-            items={filteredInvoiceRequests}
-            columns={invoiceColumns}
-            selectionMode={SelectionMode.single}
-            onActiveItemChanged={onInvoiceRequestSelect}
-            setKey="invoiceRequestList"
-          />
+          {/* <div style={{ maxHeight: '300px', border: "1px solid #eee", borderRadius: 4, background: "#fff" }}>
+            <ScrollablePane>
+              <div className="detailsListContainer" style={{ overflowX: 'auto', width: '100%' }}>
+                <DetailsList
+                  items={sortedFilteredItems}
+                  columns={invoiceColumns}
+                  selectionMode={SelectionMode.single}
+                  onActiveItemChanged={onInvoiceRequestSelect}
+                  setKey="invoiceRequestList"
+                />
+              </div>
+            </ScrollablePane>
+          </div> */}
+          <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
+            <div style={{ height: 300, position: 'relative' }}>
+              <ScrollablePane>
+                <div
+                  className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
+                >
+                  <DetailsList
+                    items={sortedFilteredItems}
+                    columns={invoiceColumns}
+                    isHeaderVisible={true}
+                    setKey="invoiceRequestList"
+                    layoutMode={DetailsListLayoutMode.justified}
+                    // onRenderItemColumn={this._renderItemColumn}
+                    // selection={this._selection}
+                    onActiveItemChanged={onInvoiceRequestSelect}
+                    selectionPreservedOnEmptyClick={true}
+                    selectionMode={SelectionMode.single}
+                    onRenderDetailsHeader={onRenderDetailsHeader}
+                  // onRenderRow={this._onRenderRow.bind(this)}
+                  />
+                </div>
+                {columnFilterMenu.visible && (
+                  <ContextualMenu
+                    items={menuItems}
+                    target={columnFilterMenu.target}
+                    onDismiss={() =>
+                      setColumnFilterMenu({ visible: false, target: null, columnKey: null })
+                    }
+                  />
+                )}
+
+              </ScrollablePane>
+            </div>
+          </div>
+
           <Panel
             isOpen={showHierPanel}
             onDismiss={() => {
-              if (showClarifyPanel) return;
-              setShowHierPanel(false);
-              setSelectedReq(null);
-              setSelectedPOItem(null);
-              setPOHierarchy(null);
-              // setViewerUrl(null);
-            }}
+              // Prevent closing if viewer panel is open
+              const fragment = window.location.hash.substring(1);
+              const [tab, query] = fragment.split("?");
+              const params = new URLSearchParams(query || "");
+              params.delete("selectedInvoice");
 
-            // headerText={`Invoice Details: ${poHierarchy.mainPO.POID}`}
+              const newFragment = params.toString() ? `${tab}?${params.toString()}` : tab;
+              window.history.replaceState(null, '', `#${newFragment}`);
+
+              if (showClarifyPanel) return;
+              if (!viewerUrl) {
+                setShowHierPanel(false);
+                setSelectedReq(null);
+                setSelectedPOItem(null);
+                setPOHierarchy(null);
+              }
+
+            }}
+            isBlocking={!!viewerUrl}
+            // headerText={`Invoice Details:`}
             type={PanelType.largeFixed}
             // isLightDismiss
             closeButtonAriaLabel="Close"
@@ -992,17 +1696,17 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                 />
                 {selectedReq.PMStatus === "Pending" && (
                   <div style={{ margin: "16px 0" }}>
-                    <button
+                    <PrimaryButton
                       onClick={() => {
                         setClarifyInvoiceAmount(selectedReq.InvoiceAmount);
                         setClarifyCustomerContact(selectedReq.Customer_x0020_Contact);
                         setClarifyComment("");
                         setShowClarifyPanel(true);
                       }}
-                      style={{ padding: '8px 24px', background: '#166BDD', color: '#fff', borderRadius: 4, border: 'none' }}
+                    // style={{ padding: '8px 24px', background: '#166BDD', color: '#fff', borderRadius: 4, border: 'none' }}
                     >
                       Clarify
-                    </button>
+                    </PrimaryButton>
                   </div>
                 )}
               </>
@@ -1034,7 +1738,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                         borderRadius: 4,
                         padding: "4px 16px"
                       }}
-                      // title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
+                    // title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
                     />
                   )}
 
@@ -1043,7 +1747,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                 <DetailsList
                   items={getFilteredRequests()}
                   columns={groupedInvColumns}
-                  selectionMode={SelectionMode.single}
+                  selectionMode={SelectionMode.none}
                   // selection={selection}
                   setKey="invoiceRequestsListByPO"
                 />
@@ -1091,7 +1795,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                 <DetailsList
                   items={getFilteredRequests()}
                   columns={groupedInvColumns}
-                  selectionMode={SelectionMode.single}
+                  selectionMode={SelectionMode.none}
                   // selection={selection}
                   setKey="invoiceRequestsListByPO"
                 />
@@ -1151,7 +1855,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                   required
                 />
                 <TextField
-                  label="Invoice Amount"
+                  label="Invoiced Amount"
                   value={clarifyInvoiceAmount?.toString() || ''}
                   onChange={(_, val) => setClarifyInvoiceAmount(val ? Number(val) : undefined)}
                   required
@@ -1175,8 +1879,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                   disabled
                 />
                 <div style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
+                  <PrimaryButton
+                    // type="button"
                     disabled={clarifyLoading || clarifyInvoiceAmount === undefined}
                     onClick={handleClarifySubmit}
                     style={{
@@ -1189,7 +1893,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
                     }}
                   >
                     Submit
-                  </button>
+                  </PrimaryButton>
                 </div>
               </>
             )}
@@ -1198,16 +1902,26 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
             isOpen={!!viewerUrl}
             onDismiss={() => {
               setViewerUrl(null);
+              setViewerName(null);
+              // Do NOT close parent panel here to keep parent open
             }}
             headerText={viewerName ?? "Document Viewer"}
             type={PanelType.large}
-            // isLightDismiss
             closeButtonAriaLabel="Close"
           >
             {viewerUrl && viewerName && (
-              <DocumentViewer url={viewerUrl} isOpen onDismiss={() => setViewerUrl(null)} fileName={viewerName} />
+              <DocumentViewer
+                url={viewerUrl}
+                isOpen
+                onDismiss={() => {
+                  setViewerUrl(null);
+                  setViewerName(null);
+                }}
+                fileName={viewerName}
+              />
             )}
           </Panel>
+
           <Dialog
             hidden={!dialogVisible}
             onDismiss={() => setDialogVisible(false)}
@@ -1220,13 +1934,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters }: M
               isBlocking: false,
             }}
           >
-            <DialogFooter>
+            <DialogFooter styles={{ actions: { justifyContent: 'center' } }}>
               <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" />
             </DialogFooter>
           </Dialog>
 
         </>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }

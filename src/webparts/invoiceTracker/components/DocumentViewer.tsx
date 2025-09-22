@@ -13,6 +13,7 @@ interface DocumentViewerProps {
   isOpen: boolean;
   onDismiss: () => void;
   fileName: string;
+  isLocalFile?: boolean; // New prop to indicate if the file is local
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ url, isOpen, onDismiss, fileName }) => {
