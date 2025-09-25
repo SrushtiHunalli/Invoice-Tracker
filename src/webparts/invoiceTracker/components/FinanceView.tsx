@@ -132,43 +132,43 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
-  const sortedItems = [...items].sort((a, b) => {
-    let aVal = (a as any)[columnKey];
-    let bVal = (b as any)[columnKey];
+  const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
+    const sortedItems = [...items].sort((a, b) => {
+      let aVal = (a as any)[columnKey];
+      let bVal = (b as any)[columnKey];
 
-    // Handle null/undefined
-    if (aVal == null && bVal == null) return 0;
-    if (aVal == null) return 1;
-    if (bVal == null) return -1;
+      // Handle null/undefined
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
 
-    // Handle Date objects
-    if (aVal instanceof Date) aVal = aVal.getTime();
-    if (bVal instanceof Date) bVal = bVal.getTime();
+      // Handle Date objects
+      if (aVal instanceof Date) aVal = aVal.getTime();
+      if (bVal instanceof Date) bVal = bVal.getTime();
 
-    // Number comparison (after Date conversion)
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return direction === 'asc' ? aVal - bVal : bVal - aVal;
-    }
+      // Number comparison (after Date conversion)
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
 
-    // Try parsing as date strings if not a number
-    const aAsDate = Date.parse(aVal);
-    const bAsDate = Date.parse(bVal);
-    if (!isNaN(aAsDate) && !isNaN(bAsDate)) {
-      return direction === 'asc' ? aAsDate - bAsDate : bAsDate - aAsDate;
-    }
+      // Try parsing as date strings if not a number
+      const aAsDate = Date.parse(aVal);
+      const bAsDate = Date.parse(bVal);
+      if (!isNaN(aAsDate) && !isNaN(bAsDate)) {
+        return direction === 'asc' ? aAsDate - bAsDate : bAsDate - aAsDate;
+      }
 
-    // Default to string comparison
-    const aStr = aVal.toString();
-    const bStr = bVal.toString();
-    return direction === 'asc'
-      ? aStr.localeCompare(bStr)
-      : bStr.localeCompare(aStr);
-  });
+      // Default to string comparison
+      const aStr = aVal.toString();
+      const bStr = bVal.toString();
+      return direction === 'asc'
+        ? aStr.localeCompare(bStr)
+        : bStr.localeCompare(aStr);
+    });
 
-  setItems(sortedItems);
-  setColumnFilterMenu({ visible: false, target: null, columnKey: null });
-};
+    setItems(sortedItems);
+    setColumnFilterMenu({ visible: false, target: null, columnKey: null });
+  };
   const menuItems = [
     { key: 'asc', text: 'Sort Asc to Desc', iconProps: { iconName: 'SortUp' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc') },
     { key: 'desc', text: 'Sort Desc to Asc', iconProps: { iconName: 'SortDown' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc') },
@@ -229,12 +229,26 @@ const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
           onColumnClick: onColumnHeaderClick,
         },
         { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
-        { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        // { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
         { key: "DueDate", name: "DueDate", fieldName: "DueDate", minWidth: 150, maxWidth: 200, isResizable: true, onRender: item => item.DueDate ? new Date(item.DueDate).toLocaleDateString() : "-", onColumnClick: onColumnHeaderClick, },
         { key: "Comments", name: "PM Comments", fieldName: "Comments", minWidth: 160, maxWidth: 300, isResizable: true, onColumnClick: onColumnHeaderClick, },
         { key: "POItem_x0020_Title", name: "PO Item Title", fieldName: "POItem_x0020_Title", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
-        { key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, },
-        { key: "InvoiceAmount", name: "Invoiced Amount", fieldName: "InvoiceAmount", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        {
+          key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: any) => {
+            if (item.POItem_x0020_Value != null && !isNaN(Number(item.POItem_x0020_Value))) {
+              return `${Number(item.POItem_x0020_Value).toLocaleString()} ${item.Currency ?? ''}`.trim();
+            }
+            return '';
+          }
+        },
+        {
+          key: "InvoiceAmount", name: "Invoiced Amount", fieldName: "InvoiceAmount", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: any) => {
+            if (item.InvoiceAmount != null && !isNaN(Number(item.InvoiceAmount))) {
+              return `${Number(item.InvoiceAmount).toLocaleString()} ${item.Currency ?? ''}`.trim();
+            }
+            return '';
+          }
+        },
         { key: "Customer_x0020_Contact", name: "Customer Contact", fieldName: "Customer_x0020_Contact", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
         {
           key: "Created", name: "Created", fieldName: "Created", minWidth: calculateWidth("Created"), maxWidth: 300, isResizable: true, onRender: item => new Date(item.Created).toLocaleDateString(), onColumnClick: onColumnHeaderClick,
@@ -609,11 +623,13 @@ const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
     }
   }
   // Handle file input change (Finance Attachments)
-  // const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   if (e.target.files) {
-  //     setAttachments(Array.from(e.target.files));
-  //   }
-  // };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setAttachments(Array.from(e.target.files)); // attachments becomes File[]
+    }
+  };
+
 
   // Save updated invoice request and upload finance attachments
 
@@ -1006,9 +1022,10 @@ const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
                       multiple
                       accept={'.pdf,.xls,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'}
                       style={{ display: 'none' }}
-                      onChange={e => {
-                        if (e.target.files) setAttachments(Array.from(e.target.files));
-                      }}
+                      // onChange={e => {
+                      //   if (e.target.files) setAttachments(Array.from(e.target.files));
+                      // }}
+                      onChange={handleFileChange}
                     />
                     <i className='ms-Icon ms-Icon--Attach' style={{ fontSize: 46, color: '#aaa' }} aria-hidden="true"></i>
                     <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload (PDF/XLSX)</div>
@@ -1036,6 +1053,15 @@ const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
                             }}>
                             {file.name}
                           </span>
+                          <button onClick={(e) => {
+                            e.stopPropagation();
+                            const objectUrl = URL.createObjectURL(file); // 'file' is the variable holding an actual File or Blob
+                            setViewerFileUrl(objectUrl);
+                            setViewerFileName(file.name);
+                            setIsViewerOpen(true);
+                          }}>
+                            Preview
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

@@ -3,7 +3,7 @@
   "solution": {
     "name": "invoice-tracker-client-side-solution",
     "id": "46d606ae-26a5-4937-bc18-7007fdc54261",
-    "version": "1.2509.22.9",
+    "version": "1.2509.25.10",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,

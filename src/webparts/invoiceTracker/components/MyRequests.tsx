@@ -55,7 +55,9 @@ interface MyProps {
   projectsp: SPFI;
   getCurrentPageUrl?: () => string;
 }
-
+interface InvoiceRequestCardProps {
+  invoice: InvoiceRequest;
+}
 interface InvoiceRequest {
   Id: number;
   Title: string;
@@ -374,7 +376,7 @@ function InvoiceDetailsCard({
       {
         item.PMCommentsHistory && formatCommentsHistory(item.PMCommentsHistory).trim() !== "" && (
           <Stack>
-            <Text variant="mediumPlus" styles={{ root: { fontWeight: '600' } }}>PM Comments</Text>
+            <Text variant="mediumPlus" styles={{ root: { fontSize: 13, fontWeight: 600, color: primaryColor } }}>PM Comments</Text>
             <div style={{
               maxHeight: 180,
               overflowY: "auto",
@@ -400,7 +402,7 @@ function InvoiceDetailsCard({
       {
         item.FinanceCommentsHistory && formatCommentsHistory(item.FinanceCommentsHistory).trim() !== "" && (
           <Stack>
-            <Text variant="mediumPlus" styles={{ root: { fontWeight: '600' } }}>Finance Comments</Text>
+            <Text variant="mediumPlus" styles={{ root: { fontSize: 13, fontWeight: 600, color: primaryColor } }}>Finance Comments</Text>
             <div style={{
               maxHeight: 180,
               overflowY: "auto",
@@ -491,48 +493,39 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   const [filterCurrentStatus, setFilterCurrentStatus] = useState<string | undefined>(undefined); // uses CurrentStatus field
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string | undefined>(undefined);   // uses Status field
   const [filterFinanceStatus, setFilterFinanceStatus] = useState<string | undefined>(undefined);
-  const [sortedColumnKey, ] = React.useState<string | null>(null);
-  const [isSortedDescending, ] = React.useState<boolean>(false);
-
+  const [sortedColumnKey,] = React.useState<string | null>(null);
+  const [isSortedDescending,] = React.useState<boolean>(false);
+  const [isInvoiceRequestViewPanelOpen, setIsInvoiceRequestViewPanelOpen] = useState(false);
+  const [selectedInvoiceRequest, setSelectedInvoiceRequest] = useState<InvoiceRequest | null>(null);
+  const onInvoiceRequestClicked = (item: InvoiceRequest) => {
+    setSelectedInvoiceRequest(item);
+    setIsInvoiceRequestViewPanelOpen(true);
+  };
   const menuItems = [
     {
       key: 'asc',
       text: 'Sort A to Z',
       iconProps: { iconName: 'SortUp' },
       onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc'),
-      // onClick: () => sortColumn(selectedColumn.fieldName, direction),
     },
     {
       key: 'desc',
       text: 'Sort Z to A',
       iconProps: { iconName: 'SortDown' },
       onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc'),
-      // onClick: () => sortColumn(selectedColumn.fieldName, direction),
     },
     { key: 'divider', itemType: ContextualMenuItemType.Divider },
   ];
-
-  // const onColumnClick = (ev?: React.MouseEvent<HTMLElement>, column?: IColumn): void => {
-  //   if (!column) return;
-
-  //   const newIsSortedDescending = sortedColumnKey === column.key ? !isSortedDescending : false;
-  //   setSortedColumnKey(column.key);
-  //   setIsSortedDescending(newIsSortedDescending);
-
-  //   const sorted = _copyAndSort(filteredInvoiceRequests, column.fieldName || column.key, newIsSortedDescending);
-  //   setSortedInvoiceRequests(sorted);
-  // };
 
   const [columnFilterMenu, setColumnFilterMenu] = useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({
     visible: false,
     target: null,
     columnKey: null,
   });
-  // const [items, setItems] = useState<InvoiceRequest[]>(invoiceRequests); // or whatever your main data is
 
   const dropdownStyles: Partial<IDropdownStyles> = {
-    dropdown: { width: 300 }, // makes the box wider
-    callout: { minWidth: 350 }, // dropdown popup wider
+    dropdown: { width: 300 },
+    callout: { minWidth: 350 },
     dropdownItem: {
       whiteSpace: 'normal',
       textOverflow: 'clip',
@@ -553,29 +546,27 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       let aVal = (a as any)[columnKey];
       let bVal = (b as any)[columnKey];
 
-      // Handle null/undefined
+
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return 1;
       if (bVal == null) return -1;
 
-      // Handle Date objects
+
       if (aVal instanceof Date) aVal = aVal.getTime();
       if (bVal instanceof Date) bVal = bVal.getTime();
       console.log(`Sorting by ${columnKey}`, aVal, bVal);
 
-      // Number comparison (after Date conversion)
+
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return direction === 'asc' ? aVal - bVal : bVal - aVal;
       }
 
-      // Try parsing as date strings if not a number
       const aAsDate = Date.parse(aVal);
       const bAsDate = Date.parse(bVal);
       if (!isNaN(aAsDate) && !isNaN(bAsDate)) {
         return direction === 'asc' ? aAsDate - bAsDate : bAsDate - aAsDate;
       }
 
-      // Default to string comparison
       const aStr = aVal.toString();
       const bStr = bVal.toString();
       return direction === 'asc'
@@ -593,7 +584,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   ) => {
     if (!column || !ev?.currentTarget) return;
 
-    // Prevent immediate sorting, show sorting menu instead
     setColumnFilterMenu({
       visible: true,
       target: ev.currentTarget as HTMLElement,
@@ -674,7 +664,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       isResizable: true,
       onRender: (item) =>
         item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
-          ? Number(item["POItem_x0020_Value"]).toLocaleString()
+          ? ` ${Number(item["POItem_x0020_Value"]).toLocaleString()} ${item.Currency ?? ''}`.trim()
           : "-",
       onColumnClick: onColumnHeaderClick
     },
@@ -685,7 +675,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       minWidth: 150,
       maxWidth: 160,
       isResizable: true,
-      onRender: (item) => item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "",
+      onRender: (item) => `${item.InvoiceAmount.toLocaleString()} ${item.Currency ?? ''}`.trim(),
       onColumnClick: onColumnHeaderClick
     },
     {
@@ -814,7 +804,45 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     },
 
   ];
+  const fieldStyle = {
+    root: { marginBottom: 8, display: 'flex' },
+    label: { fontWeight: 600, width: 180, color: '#626262', fontSize: 15 },
+    value: { fontWeight: 400, color: '#303030', fontSize: 15 }
+  };
 
+  const historyStyle = {
+    root: { background: '#f6f8fa', padding: '7px 14px', borderRadius: 6, marginBottom: 8, fontSize: 14 }
+  };
+
+  // Helper to render text or fallback
+  const renderValue = (value: any) => value ? value : <span style={{ color: '#999' }}>—</span>;
+
+  const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
+    <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
+      <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600 } }}>Invoice Request Details</Text>
+      <Separator />
+
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Title</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Title)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Value)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.POAmount)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
+
+      <Separator />
+
+      <div style={fieldStyle.label}>PM Comments History</div>
+      <div style={historyStyle.root}>{renderValue(formatCommentsHistory(invoice.PMCommentsHistory))}</div>
+
+      <div style={fieldStyle.label}>Finance Comments History</div>
+      <div style={historyStyle.root}>{renderValue(formatCommentsHistory(invoice.FinanceCommentsHistory))}</div>
+
+      <Separator />
+
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created</div><div style={fieldStyle.value}>{renderValue(invoice.Created)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created By</div><div style={fieldStyle.value}>{renderValue(invoice.Author?.Title)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified</div><div style={fieldStyle.value}>{renderValue(invoice.Modified)}</div></div>
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified By</div><div style={fieldStyle.value}>{renderValue(invoice.Editor?.Title)}</div></div>
+    </Stack>
+  );
   const [selection] = useState(
     new Selection({
       onSelectionChanged: () => {
@@ -823,6 +851,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       }
     })
   );
+
   const [clearCounter, setClearCounter] = useState(0);
   const projectOptions = React.useMemo(() => {
     return Array.from(new Set(
@@ -933,74 +962,26 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     }
   }, [selectedReq]);
 
-  // Add this in main component mount useEffect:
-  // useEffect(() => {
-  //   const searchParams = new URLSearchParams(window.location.search);
-  //   const selectedInvoiceId = searchParams.get('selectedInvoice');
-
-  //   if (selectedInvoiceId) {
-  //     // Fetch and open the invoice as usual!
-  //     fetchInvoiceRequestById(sp, Number(selectedInvoiceId)).then((invoice) => {
-  //       if (invoice) {
-  //         setSelectedReq(invoice);
-  //         setShowHierPanel(true);
-  //       }
-  //     });
-  //   }
-  // }, []);
-
-  // useEffect(() => {
-  //   // Run only once on mount or when initialFilters is available
-  //   async function loadSelectedInvoice() {
-  //     // Check if selectedInvoice is present (could be from props or URL)
-  //     const searchParams = new URLSearchParams(window.location.search);
-  //     const selectedInvoiceId = searchParams.get("selectedInvoice");
-  //     if (selectedInvoiceId) {
-  //       try {
-  //         // Fetch the invoice by ID using your fetching function
-  //         const invoice = await fetchInvoiceRequestById(sp, Number(selectedInvoiceId));
-  //         if (invoice) {
-  //           setSelectedReq(invoice);       // Set selected invoice state
-  //           setShowHierPanel(true);        // Open the details panel
-  //         }
-  //       } catch (error) {
-  //         console.error("Failed to load invoice on link open:", error);
-  //       }
-  //     }
-  //   }
-
-  //   loadSelectedInvoice();
-  // }, [sp]); // Add more dependencies if needed (e.g. initialFilters, sp context)
-
-  useEffect(() => {
-    const loadSelectedInvoiceFromUrl = async () => {
-      const searchParams = new URLSearchParams(window.location.search);
-      const selectedInvoiceId = searchParams.get('selectedInvoice');
-      if (selectedInvoiceId) {
-        try {
-          const invoiceIdNum = Number(selectedInvoiceId);
-          if (!isNaN(invoiceIdNum)) {
-            // Fetch the invoice request
-            const invoice = await fetchInvoiceRequestById(sp, invoiceIdNum);
-            if (invoice) {
-              // Call manual selection handler to initialize all related state correctly
-              await onInvoiceRequestSelect(invoice);
-            }
-          }
-        } catch (error) {
-          console.error('Error loading invoice from URL', error);
-        }
-      }
-    };
-    loadSelectedInvoiceFromUrl();
-  }, [sp, onInvoiceRequestSelect]);
-
-
-
   useEffect(() => {
     async function loadSelectedInvoice() {
       if (initialFilters?.selectedInvoice) {
         const invoiceId = Number(initialFilters.selectedInvoice);
+        if (invoiceId) {
+          try {
+            const invoice = await fetchInvoiceRequestById(sp, invoiceId);
+            if (invoice) {
+              setSelectedReq(invoice);
+              setShowHierPanel(true);
+            }
+          } catch (error) {
+            console.error("Failed to load invoice", error);
+          }
+        }
+      } else if (window.location.hash) {
+        const hash = window.location.hash;
+        const queryString = hash.split('?')[1];
+        const searchParams = new URLSearchParams(queryString);
+        const invoiceId = Number(searchParams.get('selectedInvoice'));
         if (invoiceId) {
           try {
             const invoice = await fetchInvoiceRequestById(sp, invoiceId);
@@ -1450,66 +1431,74 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   });
 
   async function onInvoiceRequestSelect(item?: InvoiceRequest) {
-    if (item) {
-      setSelectedReq(item);
+    try {
+      if (item) {
+        setSelectedReq(item);
 
-      // Load project details here directly
-      if (item.ProjectName) {
-        try {
-          const project = await projectsp.web.lists
-            .getByTitle("Projects")
-            .items
-            .filter(`Title eq '${item.ProjectName}'`)
-            .select("Title", "PM/Title", "PM/EMail", "DM/Title", "DM/EMail", "DH/Title", "DH/EMail") // Select sub-fields explicitly
-            .expand("PM", "DM", "DH")
-            .top(1)()
-            .then(items => items[0]);
+        // Load project details here directly
+        if (item.ProjectName) {
+          try {
+            const project = await projectsp.web.lists
+              .getByTitle("Projects")
+              .items
+              .filter(`Title eq '${item.ProjectName}'`)
+              .select("Title", "PM/Title", "PM/EMail", "DM/Title", "DM/EMail", "DH/Title", "DH/EMail") // Select sub-fields explicitly
+              .expand("PM", "DM", "DH")
+              .top(1)()
+              .then(items => items[0]);
 
-          setSelectedProject(project || null);
+            setSelectedProject(project || null);
 
-          const baseUrl = getCurrentPageUrl ? getCurrentPageUrl() : window.location.href; URL
-          const newUrl = `${baseUrl}#myrequests?selectedInvoice=${item.Id}`;
-          window.history.replaceState(null, '', newUrl);
+            const baseUrl = getCurrentPageUrl ? getCurrentPageUrl() : window.location.href;
+            const newUrl = `${baseUrl}#myrequests?selectedInvoice=${item.Id}`;
+            window.history.replaceState(null, '', newUrl);
 
-
-        } catch (error) {
-          console.error("Failed to load project", error);
+          } catch (error) {
+            console.error("Failed to load project", error);
+            setSelectedProject(null);
+          }
+        } else {
           setSelectedProject(null);
         }
-      } else {
-        setSelectedProject(null);
-      }
 
-      // Existing logic for PO hierarchy etc.
-      const mainPO = findMainPO(item, invoicePOs);
-      if (!mainPO) {
-        setPOHierarchy(null);
-        return;
-      }
-      const hierarchy = getHierarchyForPO(mainPO, invoicePOs, invoiceRequests);
-      setPOHierarchy(hierarchy);
-      setShowHierPanel(true);
+        // Existing logic for PO hierarchy etc.
+        const mainPO = findMainPO(item, invoicePOs);
+        if (!mainPO) {
+          setPOHierarchy(null);
+          return;
+        }
+        const hierarchy = getHierarchyForPO(mainPO, invoicePOs, invoiceRequests);
+        setPOHierarchy(hierarchy);
+        setShowHierPanel(true);
 
-      if (hierarchy) {
-        const selectedPO =
-          hierarchy.lineItemGroups.find(
-            (g) => g.poItem.POID === item["POItem_x0020_Title"]
-          ) || hierarchy.childPOGroups.find(
-            (g) => g.childPO.POID === item["POItem_x0020_Title"]
+        if (hierarchy) {
+          const selectedPO =
+            hierarchy.lineItemGroups.find(
+              (g) => g.poItem.POID === item["POItem_x0020_Title"]
+            ) || hierarchy.childPOGroups.find(
+              (g) => g.childPO.POID === item["POItem_x0020_Title"]
+            );
+
+          setSelectedPOItem(
+            selectedPO
+              ? 'poItem' in selectedPO
+                ? { POID: selectedPO.poItem.Title, POAmount: selectedPO.poItem.Value }
+                : { POID: selectedPO.childPO.POID, POAmount: selectedPO.childPO.POAmount }
+              : null
           );
-
-        setSelectedPOItem(
-          selectedPO
-            ? 'poItem' in selectedPO
-              ? { POID: selectedPO.poItem.Title, POAmount: selectedPO.poItem.Value }
-              : { POID: selectedPO.childPO.POID, POAmount: selectedPO.childPO.POAmount }
-            : null
-        );
+        } else {
+          setSelectedPOItem(null);
+        }
       } else {
+        setSelectedReq(null);
+        setSelectedProject(null);
+        setPOHierarchy(null);
         setSelectedPOItem(null);
+        setShowHierPanel(false);
       }
-    } else {
-
+    } catch (error) {
+      console.error("Error in onInvoiceRequestSelect", error);
+      // Optionally reset states on unexpected error
       setSelectedReq(null);
       setSelectedProject(null);
       setPOHierarchy(null);
@@ -1517,6 +1506,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       setShowHierPanel(false);
     }
   }
+
 
   function normalizeSelectedPOItem(item: any): { POID: string, POAmount: string } | null {
     if (!item) return null;
@@ -1610,19 +1600,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
         <Spinner label="Loading..." />
       ) : (
         <>
-          {/* <div style={{ maxHeight: '300px', border: "1px solid #eee", borderRadius: 4, background: "#fff" }}>
-            <ScrollablePane>
-              <div className="detailsListContainer" style={{ overflowX: 'auto', width: '100%' }}>
-                <DetailsList
-                  items={sortedFilteredItems}
-                  columns={invoiceColumns}
-                  selectionMode={SelectionMode.single}
-                  onActiveItemChanged={onInvoiceRequestSelect}
-                  setKey="invoiceRequestList"
-                />
-              </div>
-            </ScrollablePane>
-          </div> */}
           <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
             <div style={{ height: 300, position: 'relative' }}>
               <ScrollablePane>
@@ -1635,13 +1612,10 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     isHeaderVisible={true}
                     setKey="invoiceRequestList"
                     layoutMode={DetailsListLayoutMode.justified}
-                    // onRenderItemColumn={this._renderItemColumn}
-                    // selection={this._selection}
                     onActiveItemChanged={onInvoiceRequestSelect}
                     selectionPreservedOnEmptyClick={true}
                     selectionMode={SelectionMode.single}
                     onRenderDetailsHeader={onRenderDetailsHeader}
-                  // onRenderRow={this._onRenderRow.bind(this)}
                   />
                 </div>
                 {columnFilterMenu.visible && (
@@ -1653,11 +1627,9 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     }
                   />
                 )}
-
               </ScrollablePane>
             </div>
           </div>
-
           <Panel
             isOpen={showHierPanel}
             onDismiss={() => {
@@ -1726,28 +1698,26 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                   <strong>
                     Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
                   </strong>
-                  {selectedPOItem && (
-                    <PrimaryButton
-                      text={`Show all Invoice Requests`}
-                      onClick={() => setSelectedPOItem(null)}
-                      style={{
-                        marginLeft: 12,
-                        color: "white",
-                        background: "#166BDD",
-                        fontWeight: 600,
-                        borderRadius: 4,
-                        padding: "4px 16px"
-                      }}
-                    // title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
-                    />
-                  )}
-
+                  <PrimaryButton
+                    text={`Show all Invoice Requests`}
+                    onClick={() => setSelectedPOItem(null)}
+                    disabled={!selectedPOItem}
+                    style={{
+                      marginLeft: 12,
+                      color: "white",
+                      background: primaryColor,
+                      fontWeight: 600,
+                      borderRadius: 4,
+                      padding: "4px 16px"
+                    }}
+                  />
                 </div>
 
                 <DetailsList
                   items={getFilteredRequests()}
                   columns={groupedInvColumns}
-                  selectionMode={SelectionMode.none}
+                  selectionMode={SelectionMode.single}
+                  onActiveItemChanged={onInvoiceRequestClicked}
                   // selection={selection}
                   setKey="invoiceRequestsListByPO"
                 />
@@ -1774,49 +1744,33 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                   <strong>
                     Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
                   </strong>
-                  {selectedPOItem && (
-                    <PrimaryButton
-                      text="Show all Invoice Requests"
-                      onClick={() => setSelectedPOItem(null)}
-                      style={{
-                        marginLeft: 12,
-                        color: "white",
-                        background: "#166BDD",
-                        fontWeight: 600,
-                        borderRadius: 4,
-                        padding: "4px 16px"
-                      }}
-                      title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
-                    />
-                  )}
+                  <PrimaryButton
+                    text="Show all Invoice Requests"
+                    onClick={() => setSelectedPOItem(null)}
+                    disabled={!selectedPOItem}
+                    style={{
+                      marginLeft: 12,
+                      color: "white",
+                      background: "#166BDD",
+                      fontWeight: 600,
+                      borderRadius: 4,
+                      padding: "4px 16px"
+                    }}
+                    title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
+                  />
 
                 </div>
 
                 <DetailsList
                   items={getFilteredRequests()}
                   columns={groupedInvColumns}
-                  selectionMode={SelectionMode.none}
+                  selectionMode={SelectionMode.single}
                   // selection={selection}
+                  onActiveItemChanged={onInvoiceRequestClicked}
                   setKey="invoiceRequestsListByPO"
                 />
               </div>
             )}
-            {/* {!poHierarchy && selectedReq && (
-              <div style={{ marginTop: 20 }}>
-                <h3>Invoice Requests</h3>
-                <DetailsList
-                  items={invoiceRequests.filter(
-                    req => req.PurchaseOrder === selectedReq.PurchaseOrder
-                  )}
-                  columns={invoiceColumns}
-                  selectionMode={SelectionMode.single}
-                  // Optionally, activate selection:
-                  // onActiveItemChanged={onInvoiceRequestSelect}
-                  setKey="singlePOInvoiceRequestList"
-                />
-              </div>
-            )} */}
-
           </Panel>
           <Panel
             isOpen={showClarifyPanel}
@@ -1921,7 +1875,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
               />
             )}
           </Panel>
-
+          <Panel
+            isOpen={isInvoiceRequestViewPanelOpen}
+            onDismiss={() => { setIsInvoiceRequestViewPanelOpen(false); setSelectedInvoiceRequest(null); }}
+            headerText=""
+            type={PanelType.medium}
+          >
+            {selectedInvoiceRequest && <InvoiceRequestCard invoice={selectedInvoiceRequest} />}
+          </Panel>
           <Dialog
             hidden={!dialogVisible}
             onDismiss={() => setDialogVisible(false)}
