@@ -26,6 +26,7 @@ import {
   ContextualMenu,
   ContextualMenuItemType,
   Separator,
+  Dropdown,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
 // import { columnSort, SortType } from "./SortingUtils"
@@ -70,6 +71,7 @@ type InvoiceRequest = {
   CreatedBy?: string;
   Modified?: string;
   ModifiedBy?: string;
+  CurrentStatus?: string;
 };
 type InvoiceFormState = {
   POID: string;
@@ -83,7 +85,8 @@ type InvoiceFormState = {
   Comments: string;
   Attachment: File | null;
 };
-
+const spTheme = (window as any).__themeState__?.theme;
+const primaryColor = spTheme?.themePrimary || "#0078d4";
 const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   // const [mergedItems, ] = useState<PurchaseOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +138,12 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setSelectedInvoiceRequest(item);
     setIsInvoiceRequestViewPanelOpen(true);
   };
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = React.useState<string | null>(null); // "NotRaised" | "PartiallyPaid" | "CompletelyPaid"
+  const invoiceStatusOptions = [
+    { key: "NotRaised", text: "Invoice not raised" },
+    { key: "PartiallyPaid", text: "Partially Paid" },
+    { key: "CompletelyPaid", text: "Completely Paid" },
+  ];
 
   // const [selectedMainPO, setSelectedMainPO] = useState<PurchaseOrderItem | null>(null);
   const [invoiceFormState, setInvoiceFormState] = useState<InvoiceFormState>({
@@ -182,6 +191,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     { key: "POItemValue", name: `PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true },
     { key: "Amount", name: `Invoiced Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true },
     { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 140, maxWidth: 170, isResizable: true },
+
+    { key: "CurrentStatus", name: "Current Status", fieldName: "CurrentStatus", minWidth: 140, maxWidth: 170, isResizable: true },
     {
       key: "PMCommentsHistory",
       name: "PM Comments History",
@@ -280,6 +291,17 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         const remaining = getRemainingPOAmount(item, invoiceRequests);
         return <span>{remaining}</span>;
       },
+    },
+    {
+      key: 'InvoicedPercentItem',
+      name: 'Invoiced %',
+      minWidth: 100,
+      maxWidth: 120,
+      isResizable: true,
+      onRender: (item: ChildPOItem) => {
+        const invoicedPercent = calculateInvoicedPercentForItem(item.POID, parseFloat(item.POAmount));
+        return `${invoicedPercent.toFixed(2)}%`;
+      }
     },
     {
       key: "action",
@@ -482,26 +504,30 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     const project = allProjects.find(p => p.Title === po.ProjectName);
     if (!project) return false;
 
-    if (isAdminUser) return true;
+    if (!isAdminUser) {
+      const userEmail = currentUserEmail.toLowerCase();
+      const isUserPM = project.PM?.EMail?.toLowerCase() === userEmail;
+      const isUserDM = project.DM?.EMail?.toLowerCase() === userEmail;
+      const isUserDH = project.DH?.EMail?.toLowerCase() === userEmail;
 
-    const userEmail = currentUserEmail.toLowerCase();
+      const isInPMGroup = userGroups.includes("pm");
+      const isInDMGroup = userGroups.includes("dm");
+      const isInDHGroup = userGroups.includes("dh");
+      if (!((isInPMGroup && isUserPM) ||
+        (isInDMGroup && isUserDM) ||
+        (isInDHGroup && isUserDH))) {
+        return false;
+      }
+    }
+    if (invoiceStatusFilter) {
+      const percent = calculateInvoicedPercent(po.POID, parseFloat(po.POAmount) || 0);
 
-    const isUserPM = project.PM?.EMail?.toLowerCase() === userEmail;
-    const isUserDM = project.DM?.EMail?.toLowerCase() === userEmail;
-    const isUserDH = project.DH?.EMail?.toLowerCase() === userEmail;
-
-    const isInPMGroup = userGroups.includes("pm");
-    const isInDMGroup = userGroups.includes("dm");
-    const isInDHGroup = userGroups.includes("dh");
-
-    // User must be in the group and match the project role
-    if ((isInPMGroup && isUserPM) ||
-      (isInDMGroup && isUserDM) ||
-      (isInDHGroup && isUserDH)) {
-      return true;
+      if (invoiceStatusFilter === "NotRaised" && percent !== 0) return false;
+      if (invoiceStatusFilter === "PartiallyPaid" && !(percent > 0 && percent < 100)) return false;
+      if (invoiceStatusFilter === "CompletelyPaid" && percent !== 100) return false;
     }
 
-    return false;
+    return true;
   });
 
   function formatCommentHistory(jsonStr?: string): string {
@@ -612,7 +638,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   };
   const fieldStyle = {
     root: { marginBottom: 8, display: 'flex' },
-    label: { fontWeight: 600, width: 180, color: '#626262', fontSize: 15 },
+    label: { fontWeight: 600, width: 180, color: primaryColor, fontSize: 15 },
     value: { fontWeight: 400, color: '#303030', fontSize: 15 }
   };
 
@@ -623,7 +649,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   // Helper to render text or fallback
   const renderValue = (value: any) => value ? value : <span style={{ color: '#999' }}>—</span>;
 
- const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
+  const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
     <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
       <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600 } }}>Invoice Request Details</Text>
       <Separator />
@@ -632,7 +658,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItemValue)}</div></div>
       <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.Amount)}</div></div>
       <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
-
+      <div style={fieldStyle.root}><div style={fieldStyle.label}>Current Status</div><div style={fieldStyle.value}>{renderValue(invoice.CurrentStatus)}</div></div>
       <Separator />
 
       <div style={fieldStyle.label}>PM Comments History</div>
@@ -747,12 +773,23 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       return 0;
     }
     const matchedInvoices = invoiceRequestsForPercent.filter(
-      inv => inv.PurchaseOrderPO.trim() === rowPOID.trim()
+      inv => inv.PurchaseOrderPO.trim() === rowPOID.trim() &&
+        inv.Status?.toLowerCase() !== "cancelled"
     );
     const totalInvoicedAmount = matchedInvoices.reduce((sum, inv) => sum + (inv.Amount || 0), 0);
     return mainPOAmount > 0 ? (totalInvoicedAmount / mainPOAmount) * 100 : 0;
   }
 
+  function calculateInvoicedPercentForItem(poItemPOID: string, poItemAmount: number): number {
+    if (!invoiceRequestsForPercent || invoiceRequestsForPercent.length === 0 || !poItemAmount) return 0;
+
+    const matchedInvoices = invoiceRequests.filter(ir =>
+      ir.POItemTitle === poItemPOID.trim() && ir.PurchaseOrderPO === selectedItem.POID && ir.Status?.toLowerCase() !== "cancelled"
+    );
+    const totalInvoicedAmount = matchedInvoices.reduce((sum, inv) => sum + (inv.Amount || 0), 0);
+
+    return poItemAmount ? (totalInvoicedAmount / poItemAmount) * 100 : 0;
+  }
 
   const handleOpenInvoicePanel = async (item: ChildPOItem) => {
     if (!selectedItem) return;
@@ -1090,14 +1127,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
       const financeStatusValue = "Not Generated";
 
-      const newCommentEntry = {
-        Date: new Date().toISOString(),
-        Title: "Comment",
-        User: context.pageContext.user.displayName,
-        Role: userRole,
-        Data: invoiceFormState.Comments || ""
-      };
-
       const added = await sp.web.lists.getByTitle("Invoice Requests").items.add({
         PurchaseOrder: invoiceFormState.POID,
         ProjectName: invoiceFormState.ProjectName,
@@ -1119,11 +1148,20 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       const currentItem = await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).select("PMCommentsHistory")();
       let history = [];
 
+      if (invoiceFormState.Comments && invoiceFormState.Comments.trim().length > 0) {
+        const newCommentEntry = {
+          Date: new Date().toISOString(),
+          Title: "Comment",
+          User: context.pageContext.user.displayName,
+          Role: userRole,
+          Data: invoiceFormState.Comments.trim()
+        };
+        history.push(newCommentEntry);
+      }
+
       try {
         history = currentItem.PMCommentsHistory ? JSON.parse(currentItem.PMCommentsHistory) : [];
       } catch { history = []; }
-
-      history.push(newCommentEntry);
 
       await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).update({
         PMCommentsHistory: JSON.stringify(history)
@@ -1234,6 +1272,13 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             value={filters.search}
             onChange={(ev, newVal) => setFilters((f) => ({ ...f, search: newVal || "" }))}
             styles={{ root: { width: 250, minWidth: 250 } }}
+          />
+          <Dropdown
+            placeholder="Filter by Invoice Status"
+            options={invoiceStatusOptions}
+            selectedKey={invoiceStatusFilter}
+            onChange={(e, option) => setInvoiceStatusFilter(option?.key ? option.key.toString() : null)}
+            styles={{ dropdown: { width: 250, marginBottom: 15 } }}
           />
           <PrimaryButton text="Create Invoice Request" disabled={!selectedItem} onClick={handleOpenPanel} />
         </Stack>
