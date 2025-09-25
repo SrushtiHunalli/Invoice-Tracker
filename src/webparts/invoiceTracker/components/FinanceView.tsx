@@ -917,7 +917,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                       selectedKey={editFields.Status || selectedItem.Status || ''}
                       onChange={(_, option) => handleFieldChange('Status', option?.key)}
                     />
-                    <div style={{ height: 62 }}></div>
+                    <div style={{ height: 42 }}></div>
                     <TextField
                       label="Previous Finance Comments"
                       value={formatCommentHistory(selectedItem?.FinanceCommentsHistory) || ''}
@@ -990,9 +990,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                   <div
                     onDrop={e => {
                       e.preventDefault();
-                      const files = Array.from(e.dataTransfer.files).filter(file =>
-                        ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'].includes(file.type)
-                      );
+                      const files = Array.from(e.dataTransfer.files);
                       if (files.length) setAttachments(files);
                       setIsDragActive(false);
                     }}
@@ -1020,15 +1018,12 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                       id="finance-attachment-input"
                       type="file"
                       multiple
-                      accept={'.pdf,.xls,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'}
+                      accept="*/*"
                       style={{ display: 'none' }}
-                      // onChange={e => {
-                      //   if (e.target.files) setAttachments(Array.from(e.target.files));
-                      // }}
                       onChange={handleFileChange}
                     />
                     <i className='ms-Icon ms-Icon--Attach' style={{ fontSize: 46, color: '#aaa' }} aria-hidden="true"></i>
-                    <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload (PDF/XLSX)</div>
+                    <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload</div>
                     {attachments.length ? (
                       <>
                         <div style={{ marginTop: 15, fontSize: 14, color: '#107c10' }}>
