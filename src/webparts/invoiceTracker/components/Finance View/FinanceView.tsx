@@ -33,7 +33,7 @@ import {
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { SPFI } from "@pnp/sp";
-import DocumentViewer from "../components/DocumentViewer";
+import DocumentViewer from "../DocumentViewer";
 import styles from './FinanceView.module.scss';
 // import { columnSort, SortType } from './SortingUtils';
 // import { update } from "@microsoft/sp-lodash-subset";
@@ -61,6 +61,9 @@ const InvstatusOptions: IDropdownOption[] = [
   { key: "Payment Received", text: "Payment Received" },
   { key: "Cancelled", text: "Cancelled" }
 ];
+
+const spTheme = (window as any).__themeState__?.theme;
+const primaryColor = spTheme?.themePrimary || "#0078d4";
 
 export default function FinanceView({ sp, projectsp, context, initialFilters, onNavigate }: FinanceViewProps) {
   const [items, setItems] = useState<any[]>([]);
@@ -236,7 +239,10 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         {
           key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: any) => {
             if (item.POItem_x0020_Value != null && !isNaN(Number(item.POItem_x0020_Value))) {
-              return `${Number(item.POItem_x0020_Value).toLocaleString()} ${item.Currency ?? ''}`.trim();
+              const symbol = item.Currency ? getCurrencySymbol(item.Currency) : "";
+              const value = item.POItem_x0020_Value ?? 0;
+              return <span>{symbol} {Number(value).toLocaleString()}</span>;
+              // return `${Number(item.POItem_x0020_Value).toLocaleString()}`.trim();
             }
             return '';
           }
@@ -244,7 +250,10 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         {
           key: "InvoiceAmount", name: "Invoiced Amount", fieldName: "InvoiceAmount", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: any) => {
             if (item.InvoiceAmount != null && !isNaN(Number(item.InvoiceAmount))) {
-              return `${Number(item.InvoiceAmount).toLocaleString()} ${item.Currency ?? ''}`.trim();
+              const symbol = item.Currency ? getCurrencySymbol(item.Currency) : "";
+              const value = item.InvoiceAmount ?? 0;
+              return <span>{symbol} {Number(value).toLocaleString()}</span>;
+              // return `${Number(item.InvoiceAmount).toLocaleString()} ${item.Currency ?? ''}`.trim();
             }
             return '';
           }
@@ -307,14 +316,15 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     setDialogVisible(true);
   };
 
-  const onDialogOk = async () => {
+  const handleDialogClose = async () => {
     setDialogVisible(false);
-    setIsPanelOpen(false);
-    if (dialogType === "success") {
-      // Reload data after success dialog dismiss
-      await fetchData();
+    setIsPanelOpen(false); // Close the panel if needed
+    setSelectedItem(null); // Deselect current item to allow re-selection
+    if (dialogType === 'success') {
+      await fetchData(); // Refresh data if necessary
     }
   };
+
 
   const handlePanelDismiss = () => {
     setIsPanelOpen(false);
@@ -338,12 +348,13 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
   const handleExportToExcel = () => {
 
-    if (!editFields.FinanceComments || editFields.FinanceComments.trim() === "") {
-      setDialogMessage("No available Data to export");
-      setDialogType("error");
+    if (!filteredItems.length) {
+      setDialogMessage('No available Data to export');
+      setDialogType('error');
       setDialogVisible(true);
       return;
     }
+
 
     const exportData = filteredItems.map(item => ({
       PurchaseOrder: item.PurchaseOrder,
@@ -467,6 +478,17 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     }
   }
 
+  function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })
+      .formatToParts(1)
+      .find(part => part.type === 'currency')?.value || currencyCode;
+  }
+
   async function sendFinanceClarificationEmail(item: any) {
     if (!item) return;
 
@@ -564,7 +586,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       InvoiceNumber: item.InvoiceNumber || "",
       FinanceStatus: "Request Submitted",
       CurrentStatus: "",
-      DueDate: item.DueDate || '',
+      // DueDate: item.DueDate || '',
     });
 
     setOriginalStatus(item.Status ?? null);
@@ -592,19 +614,37 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       } catch {
         commentsArr = [];
       }
-
-      // Append the new clarification comment entry with FinanceComments content
-      commentsArr.push({
-        Title: "Clarification",
+      let history = [];
+      if (selectedItem.FinanceCommentsHistory) {
+        try {
+          const decodedJson = decodeHtmlEntities(selectedItem.FinanceCommentsHistory);
+          history = JSON.parse(decodedJson);
+          if (!Array.isArray(history)) history = [history];
+        } catch {
+          history = [];
+        }
+      }
+      // Append new comment
+      // const userRole = await getCurrentUserRole(context, selectedReq);
+      history.push({
         Date: new Date().toISOString(),
-        User: context.pageContext.user.displayName,
+        Title: 'Clarification',
+        User: context.pageContext.user.displayName || 'Unknown User',
         // Role: userRole,
         Data: editFields.FinanceComments.trim(),
       });
+      // Append the new clarification comment entry with FinanceComments content
+      // commentsArr.push({
+      //   Title: "Clarification",
+      //   Date: new Date().toISOString(),
+      //   User: context.pageContext.user.displayName,
+      //   // Role: userRole,
+      //   Data: editFields.FinanceComments.trim(),
+      // });
 
       // Update SharePoint list item with updated JSON history and status fields
       await sp.web.lists.getByTitle("Invoice Requests").items.getById(selectedItem.Id).update({
-        FinanceCommentsHistory: JSON.stringify(commentsArr),
+        FinanceCommentsHistory: JSON.stringify(history),
         FinanceStatus: "Clarification",
         PMStatus: "Pending",
         FinanceComments: editFields.FinanceComments.trim(),
@@ -640,17 +680,27 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     // const userRole = await getCurrentUserRole(context, selectedItem);
     try {
 
-      let historyArr = [];
-      try {
-        historyArr = selectedItem.FinanceCommentsHistory ? JSON.parse(selectedItem.FinanceCommentsHistory) : [];
-        if (!Array.isArray(historyArr)) historyArr = [];
-      } catch {
-        historyArr = [];
-      }
+      // let historyArr = [];
+      // try {
+      //   historyArr = selectedItem.FinanceCommentsHistory ? JSON.parse(selectedItem.FinanceCommentsHistory) : [];
+      //   if (!Array.isArray(historyArr)) historyArr = [];
+      // } catch {
+      //   historyArr = [];
+      // }
 
+      let history = [];
+      if (selectedItem.FinanceCommentsHistory) {
+        try {
+          const decodedJson = decodeHtmlEntities(selectedItem.FinanceCommentsHistory);
+          history = JSON.parse(decodedJson);
+          if (!Array.isArray(history)) history = [history];
+        } catch {
+          history = [];
+        }
+      }
       // Append new comment entry if FinanceComments was updated
       if (editFields.FinanceComments && editFields.FinanceComments.trim()) {
-        historyArr.push({
+        history.push({
           Date: new Date().toISOString(),
           Title: "Comment",
           User: context.pageContext.user.displayName,
@@ -690,7 +740,10 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       // Include updated FinanceCommentsHistory JSON string in update payload
       const updatePayload = {
         ...editFields,
-        FinanceCommentsHistory: JSON.stringify(historyArr),
+        DueDate: editFields.DueDate
+          ? (editFields.DueDate instanceof Date ? editFields.DueDate.toISOString() : editFields.DueDate)
+          : null,
+        FinanceCommentsHistory: JSON.stringify(history),
         FinanceComments: editFields.FinanceComments || "",
         FinanceStatus: newFinanceStatus,
         CurrentStatus: newCurrentStatus
@@ -787,6 +840,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
               !filters.financeStatus &&
               !filters.currentstatus
             }
+          // styles={{ root: { color: primaryColor } }}
           />
         </Stack.Item>
         <Stack.Item align="end" styles={{ root: { paddingLeft: 12 } }}>
@@ -795,6 +849,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
             title="Export to Excel"
             ariaLabel="Export to Excel"
             onClick={handleExportToExcel}
+            styles={{ root: { color: primaryColor } }}
           />
         </Stack.Item>
       </Stack>
@@ -908,16 +963,16 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                   </Stack>
                   {/* Right column */}
                   <Stack tokens={{ childrenGap: 12 }} styles={{ root: { minWidth: 300, flex: 1 } }}>
-                    <TextField label="Invoiced Amount" value={selectedItem?.InvoiceAmount?.toString() || ''} disabled />
+                    <TextField label="Invoiced Amount" value={`${getCurrencySymbol(selectedItem.Currency)} ${selectedItem?.InvoiceAmount || ''}`} disabled />
                     <TextField label="Customer Contact" value={selectedItem?.Customer_x0020_Contact || ''} disabled />
-                    <TextField label="PO Item Value" value={selectedItem?.POItem_x0020_Value || ''} disabled />
+                    <TextField label="PO Item Value" value={`${getCurrencySymbol(selectedItem.Currency)} ${selectedItem?.POItem_x0020_Value || ''}`} disabled />
                     <Dropdown
                       label="Invoice Status"
                       options={InvstatusOptions}
                       selectedKey={editFields.Status || selectedItem.Status || ''}
                       onChange={(_, option) => handleFieldChange('Status', option?.key)}
                     />
-                    <div style={{ height: 42 }}></div>
+                    <div style={{ height: 45 }}></div>
                     <TextField
                       label="Previous Finance Comments"
                       value={formatCommentHistory(selectedItem?.FinanceCommentsHistory) || ''}
@@ -1151,7 +1206,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       </Panel>
       <Dialog
         hidden={!dialogVisible}
-        onDismiss={() => setDialogVisible(false)}
+        onDismiss={() => { handleDialogClose }}
         dialogContentProps={{
           type: dialogType === 'error' ? DialogType.largeHeader : DialogType.normal,
           title: dialogType === 'error' ? 'Error' : 'Success',
@@ -1160,7 +1215,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         modalProps={{ isBlocking: false }}
       >
         <DialogFooter>
-          <PrimaryButton onClick={onDialogOk} text="OK" />
+          <PrimaryButton onClick={handleDialogClose} text="OK" />
         </DialogFooter>
       </Dialog>
     </section>

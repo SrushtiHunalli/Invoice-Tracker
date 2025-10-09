@@ -90,7 +90,7 @@ const primaryColor = spTheme?.themePrimary || "#0078d4";
 const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   // const [mergedItems, ] = useState<PurchaseOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: "", customer: "" });
+  const [filters, setFilters] = useState({ search: "" });
   // const [customerOptions, ] = useState<IDropdownOption[]>([]);
   const [selectedItem, setSelectedItem] = useState<PurchaseOrderItem | null>(null);
   const [error, setError] = useState<string>("");
@@ -129,7 +129,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const [invoiceCurrency, setInvoiceCurrency] = useState<string>("");
   const [mainPOs, setMainPOs] = useState<PurchaseOrderItem[]>([]);
   const [columnFilterMenu, setColumnFilterMenu] = React.useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({ visible: false, target: null, columnKey: null });
-
+  const [isReadOnlyInvoicePanel, setIsReadOnlyInvoicePanel] = useState(false);
   const [, setSortedColumnKey] = React.useState<string | null>(null);
   const [, setIsSortedDescending] = React.useState<boolean>(false);
   const [isInvoiceRequestViewPanelOpen, setIsInvoiceRequestViewPanelOpen] = useState(false);
@@ -138,12 +138,16 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setSelectedInvoiceRequest(item);
     setIsInvoiceRequestViewPanelOpen(true);
   };
-  const [invoiceStatusFilter, setInvoiceStatusFilter] = React.useState<string | null>(null); // "NotRaised" | "PartiallyPaid" | "CompletelyPaid"
+  const [filterMode, setFilterMode] = useState<'mainPO' | 'childPO'>('mainPO');
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = React.useState<string | null>(null); // "NotPaid" | "PartiallyInvoiced" | "CompletelyInvoiced"
   const invoiceStatusOptions = [
-    { key: "NotRaised", text: "Invoice not raised" },
-    { key: "PartiallyPaid", text: "Partially Paid" },
-    { key: "CompletelyPaid", text: "Completely Paid" },
+    { key: "NotPaid", text: "Not Paid" },
+    { key: "PartiallyInvoiced", text: "Partially Invoiced" },
+    { key: "CompletelyInvoiced", text: "Completely Invoiced" },
   ];
+  // const invoicedAmount = invoiceRequests
+  //   .filter(ir => ir.PurchaseOrderPO === po.POID && ir.Status?.toLowerCase() === "payment recieved")
+  //   .reduce((sum, inv) => sum + (inv.Amount || 0), 0);
 
   // const [selectedMainPO, setSelectedMainPO] = useState<PurchaseOrderItem | null>(null);
   const [invoiceFormState, setInvoiceFormState] = useState<InvoiceFormState>({
@@ -166,14 +170,22 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const columns: IColumn[] = [
     { key: "POID", name: "Purchase Order", fieldName: "POID", minWidth: 100, maxWidth: 150, isResizable: true, onColumnClick: onColumnHeaderClick },
     { key: "ProjectName", name: "Project Name", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true, onColumnClick: onColumnHeaderClick },
-    // { key: "Customer", name: "Customer", fieldName: "Customer", minWidth: 120, maxWidth: 160, isResizable: true },
+    { key: "POComments", name: "PO Comments", fieldName: "POComments", minWidth: 70, maxWidth: 90, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
-      key: "POAmount", name: "PO Amount", fieldName: "POAmount", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: PurchaseOrderItem) => {
-        return `${item.POAmount} ${item.Currency ?? ''}`.trim();
+      key: 'Customer',
+      name: 'Customer',
+      fieldName: 'Customer',
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true
+    },
+    {
+      key: "POAmount", name: "PO Amount", fieldName: "POAmount", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item) => {
+        // return `${item.POAmount} ${item.Currency ?? ''}`.trim();
+        const symbol = getCurrencySymbol(item.Currency);
+        return <span>{symbol} {item.POAmount}</span>;
       }
     },
-    // { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 70, maxWidth: 90, isResizable: true, onColumnClick: onColumnHeaderClick },
-    { key: "POComments", name: "PO Comments", fieldName: "POComments", minWidth: 70, maxWidth: 90, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
       key: 'InvoicedPercent',
       name: 'Invoiced %',
@@ -182,20 +194,45 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       isResizable: true,
       onColumnClick: onColumnHeaderClick,
       onRender: item => {
-        return `${calculateInvoicedPercent(item.POID, item.POAmount).toFixed(2)}%`;
+        return `${calculateInvoicedPercent(item.POID, item.POAmount).toFixed(0)}%`;
+      }
+    },
+    {
+      key: 'InvoicedAmount',
+      name: 'Invoiced Amount',
+      fieldName: 'InvoicedAmount',
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onRender: (item: PurchaseOrderItem) => {
+        const symbol = getCurrencySymbol(item.Currency);
+        const amount = invoiceRequestsForPercent
+          .filter(ir => ir.PurchaseOrderPO === item.POID && ir.Status === "Payment Received")
+          .reduce((sum, ir) => sum + (ir.Amount || 0), 0);
+        return <span>{symbol} {amount}</span>;
       }
     }
   ];
   const invoiceColumnsView: IColumn[] = [
     { key: "POItemTitle", name: "PO Item Title", fieldName: "POItemTitle", minWidth: 130, maxWidth: 180, isResizable: true },
-    { key: "POItemValue", name: `PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true },
-    { key: "Amount", name: `Invoiced Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true },
+    {
+      key: "POItemValue", name: `PO Item Value`, fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true, onRender: (item: InvoiceRequest) => {
+        const symbol = getCurrencySymbol(invoiceCurrency);
+        return <span>{symbol} {item.POItemValue}</span>;
+      }
+    },
+    {
+      key: "Amount", name: `Invoiced Amount`, fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true, onRender: (item: InvoiceRequest) => {
+        const symbol = getCurrencySymbol(invoiceCurrency);
+        return <span>{symbol} {item.Amount}</span>;
+      }
+    },
     { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 140, maxWidth: 170, isResizable: true },
 
     { key: "CurrentStatus", name: "Current Status", fieldName: "CurrentStatus", minWidth: 140, maxWidth: 170, isResizable: true },
     {
       key: "PMCommentsHistory",
-      name: "PM Comments History",
+      name: "PM Comments",
       fieldName: "PMCommentsHistory",
       minWidth: 200,
       maxWidth: 300,
@@ -276,20 +313,24 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     },
     {
       key: "POItemValue",
-      name: `PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`,
+      name: `PO Item Value`,
       fieldName: "POItemValue",
       minWidth: 120,
       maxWidth: 140,
-      isResizable: true,
-      onRender: (item: ChildPOItem) => (
-        <span>{item.POAmount}</span>
-      ),
+      // isResizable: true,
+      onRender: (item: ChildPOItem) => {
+        const symbol = getCurrencySymbol(invoiceCurrency);
+        return <span>{symbol} {item.POAmount}</span>;
+      }
     },
 
     {
-      key: "POAmount", name: `Remaining Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`, fieldName: "POAmount", minWidth: 120, maxWidth: 150, isResizable: true, onRender: (item: ChildPOItem) => {
+      key: "POAmount", name: `Remaining Item Value`, fieldName: "POAmount", minWidth: 120, maxWidth: 150, isResizable: true, onRender: (item: ChildPOItem) => {
+        // const remaining = getRemainingPOAmount(item, invoiceRequests);
+        // return <span>{remaining}</span>;
+        const symbol = getCurrencySymbol(invoiceCurrency);
         const remaining = getRemainingPOAmount(item, invoiceRequests);
-        return <span>{remaining}</span>;
+        return <span>{symbol} {remaining}</span>;
       },
     },
     {
@@ -300,7 +341,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       isResizable: true,
       onRender: (item: ChildPOItem) => {
         const invoicedPercent = calculateInvoicedPercentForItem(item.POID, parseFloat(item.POAmount));
-        return `${invoicedPercent.toFixed(2)}%`;
+        return `${invoicedPercent.toFixed(0)}%`;
       }
     },
     {
@@ -312,11 +353,18 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       isResizable: false,
       onRender: (item: ChildPOItem) => {
         const remaining = getRemainingPOAmount(item, invoiceRequests);
+        if (isReadOnlyInvoicePanel) {
+          return null; // Hide the add button in read-only mode
+        }
         return remaining > 0 ? (
           <IconButton
             iconProps={{ iconName: "Add" }}
             ariaLabel="Create Invoice Request"
-            onClick={() => handleOpenInvoicePanel(item)}
+            // onClick={() => handleOpenInvoicePanel(item)}
+            onClick={e => {
+              e.stopPropagation();  // Prevent DetailsList row click/selection
+              handleOpenInvoicePanel(item);
+            }}
             styles={{ root: { marginLeft: 8 } }}
           />
         ) : null;
@@ -377,6 +425,57 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     }));
     setUploadedFiles([]);
   };
+  const handlePOIDDoubleClick = async (item: PurchaseOrderItem) => {
+    if (!selectedItem) return;
+    setInvoiceCurrency(selectedItem.Currency || "");
+    setFetchingChildPOs(true);
+    setFetchingInvoices(true);
+    setChildPOItems([]);
+    setInvoiceRequests([]);
+    setActivePOIDFilter(null);
+    setIsPanelOpen(false);
+    setIsInvoicePanelOpen(false);
+    setIsReadOnlyInvoicePanel(true);
+
+    try {
+      const allSalesRecords = await fetchAllPORecords();
+      console.log("Fetched all sales records:", allSalesRecords);
+
+      const rec = allSalesRecords.find((r: any) => findPOIndex(r, selectedItem.POID) !== null);
+
+      if (!rec) {
+
+        const invoices = await fetchInvoiceRequests(sp, [selectedItem.POID]);
+        setInvoiceRequests(invoices);
+        await handleOpenInvoicePanelSinglePO(selectedItem, "");
+        return;
+      }
+      const poIndex = findPOIndex(rec, selectedItem.POID)!;
+      let children = getChildItemsForPO(rec, poIndex);
+      console.log("Child POs from JSON or ChildPO fields:", children);
+      if (!children.length) {
+        children = findChildPOsByParentPOID(allSalesRecords, selectedItem.POID);
+        console.log("Child POs found by scanning ParentPOID columns:", children);
+      }
+      setChildPOItems(children);
+      const poids = children.length > 0 ? [selectedItem.POID, ...children.map(c => c.POID)] : [selectedItem.POID];
+      const invoices = await fetchInvoiceRequests(sp, poids);
+      setInvoiceRequests(invoices);
+
+      const poamount = poIndex !== null ? (rec[`POAmount${poIndex === 0 ? "" : poIndex + 1}`] || "") : "";
+
+      if (children.length === 0) {
+        await handleOpenInvoicePanelSinglePO(selectedItem, poamount);
+      } else {
+        setIsPanelOpen(true);
+      }
+    } catch (err) {
+      console.error("Error during PO handling", err);
+    } finally {
+      setFetchingChildPOs(false);
+      setFetchingInvoices(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -385,7 +484,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       try {
         const items = await sp.web.lists.getByTitle("InvoicePO")
           .items
-          .select("ID", "POID", "ParentPOID", "POAmount", "LineItemsJSON", "ProjectName", "Currency", "POComments")();
+          .select("ID", "POID", "ParentPOID", "POAmount", "LineItemsJSON", "ProjectName", "Currency", "POComments", "Customer")();
 
         setAllInvoicePOs(items);
 
@@ -401,6 +500,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             POAmount: item.POAmount || "",
             Currency: item.Currency || "",
             POComments: item.POComments || "",
+            Customer: item.Customer || "",
           }));
 
         const childrenByMainPO = new Map<string, ChildPOItem[]>();
@@ -522,9 +622,9 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     if (invoiceStatusFilter) {
       const percent = calculateInvoicedPercent(po.POID, parseFloat(po.POAmount) || 0);
 
-      if (invoiceStatusFilter === "NotRaised" && percent !== 0) return false;
-      if (invoiceStatusFilter === "PartiallyPaid" && !(percent > 0 && percent < 100)) return false;
-      if (invoiceStatusFilter === "CompletelyPaid" && percent !== 100) return false;
+      if (invoiceStatusFilter === "NotPaid" && percent !== 0) return false;
+      if (invoiceStatusFilter === "PartiallyInvoiced" && !(percent > 0 && percent < 100)) return false;
+      if (invoiceStatusFilter === "CompletelyInvoiced" && percent !== 100) return false;
     }
 
     return true;
@@ -532,25 +632,28 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   function formatCommentHistory(jsonStr?: string): string {
     if (!jsonStr) return "";
-
     try {
-      // Decode HTML entities before parsing JSON
       const decodedStr = decodeHtmlEntities(jsonStr);
+      const entries = JSON.parse(decodedStr);
+      if (!Array.isArray(entries)) return "";
 
-      const arr = JSON.parse(decodedStr);
-      if (!Array.isArray(arr)) return "";
-
-      return arr.map((entry: any) => {
+      return entries.map((entry: any) => {
         const dateObj = entry.Date ? new Date(entry.Date) : null;
         const date = dateObj ? dateObj.toLocaleDateString() : "";
         const time = dateObj ? dateObj.toLocaleTimeString() : "";
-        const title = entry.Title || entry.title || "";
-        const user = entry.User || "";
-        const role = entry.Role ? ` (${entry.Role})` : "";
-        const data = entry.Data || entry.comment || "";
-        return `[${date} ${time}]${user}${role} \n${title}:${data}`;
-      }).join("\n\n");
+        const user = entry.User ?? "";
+        const role = entry.Role ?? "";
+        const title = entry.Title ?? "";
 
+        // Split comment lines
+        const dataLines = (entry.Data ?? "").split("\n");
+
+        // Join lines with <br /> or just join with newline if rendering supports it
+        const formattedComment = dataLines.join("<br />");
+
+        // Format output string combining all parts
+        return `${date} ${time} ${user} (${role}) ${title}: ${formattedComment}`;
+      }).join("<br /><br />"); // Separate multiple comments by extra line breaks
     } catch (err) {
       console.error("Failed to format comment history", err, jsonStr);
       return "";
@@ -596,6 +699,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setActivePOIDFilter(null);
     setIsPanelOpen(false);
     setIsInvoicePanelOpen(false);
+    setIsReadOnlyInvoicePanel(false);
 
     try {
       const allSalesRecords = await fetchAllPORecords();
@@ -737,19 +841,24 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setIsPanelOpen(false);
     setChildPOItems([]);
     setInvoiceRequests([]);
-    setActivePOIDFilter(null);
+    // setActivePOIDFilter(null);
     childPOSelection.setAllSelected(false);
+    setIsReadOnlyInvoicePanel(false);
     window.history.replaceState(null, '', window.location.pathname);
   };
   const handleChildPORowClick = (item?: ChildPOItem) => {
     if (item) {
       setActivePOIDFilter(item.POID);
+      setFilterMode('childPO');
       childPOSelection.setKeySelected(item.Id.toString(), true, false);
     }
   };
-  const showInvoices = activePOIDFilter
-    ? invoiceRequests.filter((ir) => ir.POItemTitle === activePOIDFilter)
-    : invoiceRequests;
+
+  const showInvoices =
+    filterMode === 'mainPO'
+      ? invoiceRequests.filter(ir => ir.PurchaseOrderPO === activePOIDFilter)
+      : invoiceRequests.filter(ir => ir.POItemTitle === activePOIDFilter);
+
 
   const handleInvoiceFormChange = (field: keyof InvoiceFormState, value: any) => {
     setInvoiceFormState((prev) => ({
@@ -996,7 +1105,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           "Created",
           "Author/Title",
           "Modified",
-          "Editor/Title"
+          "Editor/Title",
+          "CurrentStatus"
         )
         .expand("Author", "Editor")();
 
@@ -1018,6 +1128,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         CreatedBy: item.Author?.Title ?? "",
         Modified: item.Modified,
         ModifiedBy: item.Editor?.Title ?? "",
+        CurrentStatus: item.CurrentStatus,
       }));
     } catch {
       return [];
@@ -1061,6 +1172,17 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       console.error("Error determining user role:", error);
       return "Unknown Role";
     }
+  }
+
+  function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })
+      .formatToParts(1)
+      .find(part => part.type === 'currency')?.value || currencyCode;
   }
 
   async function getProjectNameByPOID(context: any, poId: number, poItem: any): Promise<string> {
@@ -1127,27 +1249,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
       const financeStatusValue = "Not Generated";
 
-      const added = await sp.web.lists.getByTitle("Invoice Requests").items.add({
-        PurchaseOrder: invoiceFormState.POID,
-        ProjectName: invoiceFormState.ProjectName,
-        POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
-        POItem_x0020_Title: invoicePanelPO === null ? null : invoiceFormState.POItemTitle,
-        POItem_x0020_Value: invoicePanelPO === null ? null : (invoiceFormState.POItemValue ? Number(invoiceFormState.POItemValue) : null),
-        InvoiceAmount: invoiceFormState.InvoiceAmount ? Number(invoiceFormState.InvoiceAmount) : null,
-        Customer_x0020_Contact: invoiceFormState.CustomerContact,
-        Comments: invoiceFormState.Comments,
-        PMStatus: "Submitted",
-        FinanceStatus: "Pending",
-        Status: financeStatusValue,
-        Currency: invoiceCurrency,
-        CurrentStatus: `Request Submitted by ${userRole}`
-      });
-
-      addedItemId = added.Id;
-
-      const currentItem = await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).select("PMCommentsHistory")();
-      let history = [];
-
       if (invoiceFormState.Comments && invoiceFormState.Comments.trim().length > 0) {
         const newCommentEntry = {
           Date: new Date().toISOString(),
@@ -1156,16 +1257,43 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           Role: userRole,
           Data: invoiceFormState.Comments.trim()
         };
-        history.push(newCommentEntry);
+
+        const pmCommentsHistoryArray = [newCommentEntry];
+
+        await sp.web.lists.getByTitle("Invoice Requests").items.add({
+          PurchaseOrder: invoiceFormState.POID,
+          ProjectName: invoiceFormState.ProjectName,
+          POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
+          POItem_x0020_Title: invoicePanelPO === null ? null : invoiceFormState.POItemTitle,
+          POItem_x0020_Value: invoicePanelPO === null ? null : (invoiceFormState.POItemValue ? Number(invoiceFormState.POItemValue) : null),
+          InvoiceAmount: invoiceFormState.InvoiceAmount ? Number(invoiceFormState.InvoiceAmount) : null,
+          Customer_x0020_Contact: invoiceFormState.CustomerContact,
+          Comments: invoiceFormState.Comments,
+          PMStatus: "Submitted",
+          FinanceStatus: "Pending",
+          Status: financeStatusValue,
+          Currency: invoiceCurrency,
+          CurrentStatus: `Request Submitted by ${userRole}`,
+          PMCommentsHistory: JSON.stringify(pmCommentsHistoryArray)
+        });
+
+      } else {
+        await sp.web.lists.getByTitle("Invoice Requests").items.add({
+          PurchaseOrder: invoiceFormState.POID,
+          ProjectName: invoiceFormState.ProjectName,
+          POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
+          POItem_x0020_Title: invoicePanelPO === null ? null : invoiceFormState.POItemTitle,
+          POItem_x0020_Value: invoicePanelPO === null ? null : (invoiceFormState.POItemValue ? Number(invoiceFormState.POItemValue) : null),
+          InvoiceAmount: invoiceFormState.InvoiceAmount ? Number(invoiceFormState.InvoiceAmount) : null,
+          Customer_x0020_Contact: invoiceFormState.CustomerContact,
+          Comments: invoiceFormState.Comments,
+          PMStatus: "Submitted",
+          FinanceStatus: "Pending",
+          Status: financeStatusValue,
+          Currency: invoiceCurrency,
+          CurrentStatus: `Request Submitted by ${userRole}`
+        });
       }
-
-      try {
-        history = currentItem.PMCommentsHistory ? JSON.parse(currentItem.PMCommentsHistory) : [];
-      } catch { history = []; }
-
-      await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).update({
-        PMCommentsHistory: JSON.stringify(history)
-      });
 
       if (invoicePanelPO === null && invoiceFormState.POItemValue) {
         await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).update({
@@ -1180,10 +1308,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           .attachmentFiles.add(fileNameWithSuffix, fileContent);
       }
 
-      // const siteUrl = context.pageContext.web.absoluteUrl;
-      // const listName = "Invoice Requests";
-
-      // const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${addedItemId}`;
       const creatorEmail = context.pageContext.user.email;
 
       const siteUrl = context.pageContext.web.absoluteUrl;
@@ -1217,6 +1341,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           const allPOIDs = mainPOs.map(po => po.POID);
           const updatedInvoices = await fetchInvoiceRequests(sp, allPOIDs);
           setInvoiceRequests(updatedInvoices);
+          setActivePOIDFilter(selectedItem?.POID);
           setInvoiceRequestsForPercent(updatedInvoices);
           setIsInvoicePanelOpen(false);
           setInvoicePanelPO(null);
@@ -1278,7 +1403,16 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             options={invoiceStatusOptions}
             selectedKey={invoiceStatusFilter}
             onChange={(e, option) => setInvoiceStatusFilter(option?.key ? option.key.toString() : null)}
-            styles={{ dropdown: { width: 250, marginBottom: 15 } }}
+          // styles={{ dropdown: { width: 250, marginBottom: 15 } }}
+          />
+          <PrimaryButton
+            text="Clear Filters"
+            onClick={() => {
+              setFilters({ search: "" });
+              setInvoiceStatusFilter(null);
+            }}
+            styles={{ root: { backgroundColor: primaryColor } }}
+          // styles={{ root: { marginRight: 12 } }}
           />
           <PrimaryButton text="Create Invoice Request" disabled={!selectedItem} onClick={handleOpenPanel} />
         </Stack>
@@ -1301,6 +1435,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                     layoutMode={DetailsListLayoutMode.justified}
                     selectionPreservedOnEmptyClick={true}
                     onRenderDetailsHeader={onRenderDetailsHeader}
+                    onItemInvoked={handlePOIDDoubleClick}
                   />
                 </div>
                 {columnFilterMenu.visible && (
@@ -1336,22 +1471,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           }}
         >
           <Stack tokens={{ childrenGap: 18 }} styles={{ root: { marginTop: 6, marginBottom: 6 } }}>
-            {/* <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <TextField
-              label={"Purchase Order:"}
-              value={selectedItem?.POID || ""}
-              readOnly
-              disabled
-              styles={{ root: { maxWidth: 280, marginBottom: 0 } }}
-            />
-            <TextField
-              label={`PO Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
-              value={selectedItem?.POAmount || ""}
-              readOnly
-              disabled
-              styles={{ root: { maxWidth: 280, marginTop: 10, marginBottom: 0 } }}
-            />
-            </div> */}
             <div style={{ display: "flex", flexDirection: "row", gap: 24, alignItems: "flex-start", marginTop: 0, marginBottom: 0 }}>
               <TextField
                 label="Purchase Order"
@@ -1361,7 +1480,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 styles={{ root: { maxWidth: 220, marginTop: 0, marginBottom: 0, fontSize: 15, fontWeight: 600 } }}
               />
               <TextField
-                label={`PO Amount${selectedItem?.Currency ? ` (${selectedItem?.Currency})` : ''}`}
+                label={`PO Amount`}
                 value={selectedItem?.POAmount}
                 readOnly
                 disabled
@@ -1412,8 +1531,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 <div>
                   <PrimaryButton
                     text="Show all Invoice Requests"
-                    onClick={() => setActivePOIDFilter(null)}
-                    styles={{ root: { marginLeft: 24 } }}
+                    onClick={() => { setActivePOIDFilter(selectedItem?.POID || null); setFilterMode('mainPO'); }}
+                    styles={{ root: { marginLeft: 24, backgroundColor: primaryColor } }}
                     disabled={!activePOIDFilter}
                   />
                 </div>
@@ -1476,9 +1595,9 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 {invoicePanelPO && (
                   <>
                     <TextField label="PO Item Title" value={invoiceFormState.POItemTitle} readOnly disabled />
-                    <TextField label={`PO Item Value${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`} value={invoiceFormState.POItemValue} readOnly disabled />
+                    <TextField label={`PO Item Value${invoiceCurrency ? ` (${getCurrencySymbol(invoiceCurrency)})` : ""}`} value={invoiceFormState.POItemValue} readOnly disabled />
                     <TextField
-                      label={`Amount remaining${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
+                      label={`Amount remaining${invoiceCurrency ? ` (${getCurrencySymbol(invoiceCurrency)})` : ""}`}
                       value={String(getRemainingPOAmount(
                         { POID: invoiceFormState.POItemTitle || "", POAmount: invoiceFormState.POItemValue || "0", Id: 0, ParentPOIndex: 0, POIndex: 0 },
                         invoiceRequests
@@ -1488,7 +1607,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                   </>
                 )}
                 <TextField
-                  label={`Invoiced Amount${invoiceCurrency ? ` (${invoiceCurrency})` : ""}`}
+                  label={`Invoiced Amount${invoiceCurrency ? ` (${getCurrencySymbol(invoiceCurrency)})` : ""}`}
                   value={invoiceFormState.InvoiceAmount}
                   onChange={(_, val) => handleInvoiceAmountChange(val || "")}
                   type="number"
@@ -1506,7 +1625,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                   onChange={(_, val) => handleInvoiceFormChange("Comments", val || "")}
                   multiline
                 />
-                <PrimaryButton text="Submit" onClick={handleInvoiceFormSubmit} styles={{ root: { marginTop: 12, minWidth: 110 } }} />
+                <PrimaryButton text="Submit" onClick={handleInvoiceFormSubmit} styles={{ root: { marginTop: 12, minWidth: 110, backgroundColor: primaryColor } }} />
               </Stack>
 
               {/* RIGHT HALF: Attachments & Preview */}
@@ -1516,7 +1635,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                     <PrimaryButton
                       text="Close Preview"
                       onClick={() => setPreviewFileIdx(null)}
-                      styles={{ root: { marginBottom: 10 } }}
+                      styles={{ root: { marginBottom: 10, backgroundColor: primaryColor } }}
                     />
                     <iframe
                       src={URL.createObjectURL(uploadedFiles[previewFileIdx])}
@@ -1583,7 +1702,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                             <PrimaryButton
                               text="Preview"
                               onClick={() => setPreviewFileIdx(idx)}
-                              styles={{ root: { marginLeft: 10, minWidth: 60, height: 28 } }}
+                              styles={{ root: { marginLeft: 10, minWidth: 60, height: 28, backgroundColor: primaryColor } }}
                             />
                           </Stack>
                         ))
@@ -1634,7 +1753,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           }}
         >
           <DialogFooter>
-            <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" />
+            <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" styles={{ root: { backgroundColor: primaryColor } }} />
           </DialogFooter>
         </Dialog>
       </div>

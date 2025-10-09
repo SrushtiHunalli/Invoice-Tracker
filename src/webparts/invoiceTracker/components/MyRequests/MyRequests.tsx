@@ -37,7 +37,7 @@ import {
   ContextualMenuItemType,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
-import DocumentViewer from "../components/DocumentViewer";
+import DocumentViewer from "../DocumentViewer";
 import styles from "./MyRequests.module.scss"
 interface MyProps {
   sp: SPFI;
@@ -106,21 +106,45 @@ interface POHierarchy {
   childPOGroups: { childPO: InvoicePO; requests: InvoiceRequest[] }[];
   mainPORequests: InvoiceRequest[];
 }
-const steps = ["Request Submitted", "Not Generated", "Pending Payment", "Payment Received"];
+// interface StatusStepperProps {
+//   currentStatus: string;
+//   steps: string[];
+// }
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
+
+const steps = ["Request Submitted", "Not Generated", "Invoice Raised", "Pending Payment", "Payment Received", "Cancelled"];
+// const spTheme = (window as any).__themeState__?.theme;
+// const primaryColor = spTheme?.themePrimary || "#0078d4";
 function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps: string[] }) {
-  const currentStep = steps.indexOf(currentStatus);
+  let visibleSteps: string[] = [];
+  let onlyCancelledStep = false;
+
+  // Logic to determine which steps to show based on currentStatus
+  if (currentStatus === "Cancelled") {
+
+    visibleSteps = ["Cancelled"];
+    onlyCancelledStep = true;
+
+  } else {
+    visibleSteps = ["Request Submitted", "Not Generated", "Invoice Raised", "Pending Payment", "Payment Received"];
+  }
+  const currentStep = visibleSteps.indexOf(currentStatus);
   return (
     <div style={{ margin: "40px 0 16px 0" }}>
       <div style={{ display: "flex", alignItems: "center" }}>
-        {steps.map((step, idx) => {
+        {visibleSteps.map((visibleSteps, idx) => {
           let circleBorder = "#E5AF5";
           let circleBg = "#fff";
           let dotColor = "#166BDD";
           let connectorBg = "#E5AF5";
           let dot = null;
-          if (idx === steps.length - 1 && currentStep === idx) {
+          if (onlyCancelledStep) {
+            circleBorder = "FF0000"; // red border
+            circleBg = "#fff";
+            dot = <span style={{ color: "red", fontWeight: "bold", fontSize: 18 }}>X</span>;
+          }
+          else if (idx === visibleSteps.length - 1 && currentStep === idx) {
             circleBorder = "#20bb55";
             circleBg = "#20bb55";
             dot = <span style={{ fontWeight: "bold", fontSize: 18, color: "#fff" }}>✓</span>;
@@ -134,7 +158,7 @@ function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps:
             connectorBg = "#166BDD";
           }
           return (
-            <React.Fragment key={`step-${step}`}>
+            <React.Fragment key={`step-${visibleSteps}`}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <div
                   style={{
@@ -155,17 +179,17 @@ function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps:
                 <div
                   style={{
                     fontSize: 12,
-                    color: idx <= currentStep ? (idx === steps.length - 1 && currentStep >= idx ? "#20bb55" : "#166BDD") : "#A0A5AF",
+                    color: idx <= currentStep ? (idx === visibleSteps.length - 1 && currentStep >= idx ? "#20bb55" : "#166BDD") : "#A0A5AF",
                     fontWeight: idx === currentStep ? 600 : 400,
                     textAlign: "center",
                     minWidth: 72,
                     userSelect: "none",
                   }}
                 >
-                  {step}
+                  {visibleSteps}
                 </div>
               </div>
-              {idx < steps.length - 1 && <div style={{ flex: 1, height: 2, background: connectorBg, margin: "0 4px" }} />}
+              {idx < visibleSteps.length - 1 && <div style={{ flex: 1, height: 2, background: connectorBg, margin: "0 4px" }} />}
             </React.Fragment>
           );
         })}
@@ -219,7 +243,24 @@ function InvoiceDetailsCard({
 }) {
   if (!item) return null;
   // const hideItem = !item["POItem_x0020_Title"] && !item["POItem_x0020_Value"];
-  const itemCurrency = item.Currency;
+  const itemCurrency = getCurrencySymbol(item.Currency);
+
+  function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
+    if (!currencyCode) return '';
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: currencyCode,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      })
+        .formatToParts(1)
+        .find(part => part.type === 'currency')?.value || currencyCode;
+    } catch {
+      return currencyCode;
+    }
+  }
+
   return (
     <Stack
       tokens={{ childrenGap: 20 }}
@@ -241,67 +282,6 @@ function InvoiceDetailsCard({
           Invoice Details
         </Text>
       </Stack>
-
-      {/* <Stack horizontal wrap tokens={{ childrenGap: 40 }}>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
-            Purchase Order
-          </Text>
-          <Text variant="large">{item.PurchaseOrder || "-"}</Text>
-        </Stack>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
-            Project Name
-          </Text>
-          <Text variant="large">{item.ProjectName || "-"}</Text>
-        </Stack>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
-            PO Amount
-          </Text>
-          <Text variant="large">
-            {item.POAmount != null && !isNaN(Number(item.POAmount))
-              ? `${Number(item.POAmount).toLocaleString()}(${itemCurrency})`
-              : "-"}
-          </Text>
-        </Stack>
-      </Stack>
-
-      {!hideItem && (
-        <Stack horizontal wrap tokens={{ childrenGap: 40 }}>
-          <Stack>
-            <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
-              PO Item Title
-            </Text>
-            <Text variant="large">{item["POItem_x0020_Title"] || "-"}</Text>
-          </Stack>
-          <Stack>
-            <Text variant="mediumPlus" styles={{ root: { color: "#444", fontWeight: '600' } }}>
-              PO Item Value
-            </Text>
-            <Text variant="large">
-              {item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
-                ? `${Number(item["POItem_x0020_Value"]).toLocaleString()}(${itemCurrency})`
-                : "-"}
-            </Text>
-          </Stack>
-        </Stack>
-      )}
-      <Stack horizontal tokens={{ childrenGap: 32 }} styles={{ root: { marginBottom: 12 } }}>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Invoiced Amount</Text>
-          <Text variant="large">{item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "-"}(USD)</Text>
-        </Stack>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Invoice Status</Text>
-          <Text variant="large">{item.Status || "-"}</Text>
-        </Stack>
-        <Stack>
-          <Text variant="mediumPlus" styles={{ root: { color: '#444', fontWeight: 600 } }}>Current Status</Text>
-          <Text variant="large">{item.CurrentStatus || "-"}</Text>
-        </Stack>
-      </Stack> */}
-
       <div
         style={{
           display: "grid",
@@ -322,13 +302,13 @@ function InvoiceDetailsCard({
           {
             label: "PO Item Value:",
             value: item["POItem_x0020_Value"]
-              ? `${Number(item["POItem_x0020_Value"]).toLocaleString()} (${itemCurrency})`
+              ? `${itemCurrency} ${Number(item["POItem_x0020_Value"]).toLocaleString()}`
               : "-",
           },
           {
             label: "Invoiced Amount:",
             value: item.InvoiceAmount
-              ? `${item.InvoiceAmount.toLocaleString()} (${itemCurrency})`
+              ? `${itemCurrency} ${item.InvoiceAmount.toLocaleString()}`
               : "-",
           },
           {
@@ -467,7 +447,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     mainPORequests: InvoiceRequest[];
   }>(null);
   const [selectedReq, setSelectedReq] = useState<InvoiceRequest | null>(null);
-  const [selectedPOItem, setSelectedPOItem] = useState<{ POID: string; POAmount: string } | null>(null);
+  const [selectedPOItem, setSelectedPOItem] = useState<{ POID: string; POAmount: string; Currency: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showClarifyPanel, setShowClarifyPanel] = useState(false);
@@ -477,8 +457,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   const [clarifyLoading, setClarifyLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filterProjectName, setFilterProjectName] = useState<string | undefined>(undefined);
-  // const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
-  // const [filterFinanceStatus, setFilterFinanceStatus] = useState<string | undefined>(undefined);
   const [, setProjectOptions] = useState<string[]>([]);
   const [, setStatusOptions] = useState<string[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -488,7 +466,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   const [showHierPanel, setShowHierPanel] = useState(false); // main panel
   const [viewerUrl, setViewerUrl] = useState<string | null>(null); // viewer panel
   const [viewerName, setViewerName] = useState<string | null>(null);
-  // const [, setSortedInvoiceRequests] = React.useState<InvoiceRequest[]>(invoiceRequests);
   const [sortedFilteredItems, setSortedFilteredItems] = React.useState<any[]>([]);
   const [filterCurrentStatus, setFilterCurrentStatus] = useState<string | undefined>(undefined); // uses CurrentStatus field
   const [filterInvoiceStatus, setFilterInvoiceStatus] = useState<string | undefined>(undefined);   // uses Status field
@@ -497,6 +474,12 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   const [isSortedDescending,] = React.useState<boolean>(false);
   const [isInvoiceRequestViewPanelOpen, setIsInvoiceRequestViewPanelOpen] = useState(false);
   const [selectedInvoiceRequest, setSelectedInvoiceRequest] = useState<InvoiceRequest | null>(null);
+  const [invoicePercentStatusFilter, setInvoicePercentStatusFilter] = React.useState<string | null>(null);
+  const invoicePercentStatusOptions: IDropdownOption[] = [
+    { key: "NotPaid", text: "Not Paid" },
+    { key: "PartiallyInvoiced", text: "Partially Invoiced" },
+    { key: "CompletelyInvoiced", text: "Completely Invoiced" },
+  ];
   const onInvoiceRequestClicked = (item: InvoiceRequest) => {
     setSelectedInvoiceRequest(item);
     setIsInvoiceRequestViewPanelOpen(true);
@@ -631,7 +614,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
 
   // Columns for Invoice requests list:
   const invoiceColumns: IColumn[] = [
-    // { key: "Title", name: "Title", fieldName: "Title", minWidth: 170, maxWidth: 270, isResizable: true },
     { key: "PurchaseOrder", name: "POID", fieldName: "PurchaseOrder", minWidth: 100, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick, },
     { key: "ProjectName", name: "Project", fieldName: "ProjectName", minWidth: 150, maxWidth: 220, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
@@ -645,6 +627,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       onColumnClick: onColumnHeaderClick
     },
     { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick },
+    { key: "CurrentStatus", name: "Current Status", fieldName: "CurrentStatus", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick },
     {
       key: "POItem_x0020_Title",
       name: "PO Item Title",
@@ -662,10 +645,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       minWidth: 140,
       maxWidth: 160,
       isResizable: true,
-      onRender: (item) =>
-        item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
-          ? ` ${Number(item["POItem_x0020_Value"]).toLocaleString()} ${item.Currency ?? ''}`.trim()
-          : "-",
+      onRender: (item) => {
+        // item["POItem_x0020_Value"] != null && !isNaN(Number(item["POItem_x0020_Value"]))
+        //   ? ` ${Number(item["POItem_x0020_Value"]).toLocaleString()} ${item.Currency ?? ''}`.trim()
+        //   : "-",
+        const symbol = getCurrencySymbol(item.Currency);
+        const value = item.POItem_x0020_Value ?? '';
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      },
       onColumnClick: onColumnHeaderClick
     },
     {
@@ -675,8 +662,31 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       minWidth: 150,
       maxWidth: 160,
       isResizable: true,
-      onRender: (item) => `${item.InvoiceAmount.toLocaleString()} ${item.Currency ?? ''}`.trim(),
+      onRender: (item) => {
+        const symbol = getCurrencySymbol(item.Currency);
+        const value = item.InvoiceAmount ?? '';
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      },
+      // }`${item.InvoiceAmount.toLocaleString()} ${item.Currency ?? ''}`.trim(),
       onColumnClick: onColumnHeaderClick
+    },
+    {
+      key: 'InvoicedPercent',
+      name: 'Invoiced %',
+      fieldName: 'InvoicedPercent',
+      minWidth: 100,
+      maxWidth: 120,
+      isResizable: true,
+      onRender: item => item.InvoicedPercent?.toFixed(0)
+    },
+    {
+      key: 'POItemInvoicedPercent',
+      name: 'PO Item Invoiced %',
+      fieldName: 'POItemInvoicedPercent',
+      minWidth: 120,
+      maxWidth: 140,
+      isResizable: true,
+      onRender: item => item.POItemInvoicedPercent?.toFixed(0)
     },
     {
       key: "Created",
@@ -724,20 +734,48 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   // Columns for PO items:
   const poColumns: IColumn[] = [
     { key: "POID", name: "POItem Title", fieldName: "POID", minWidth: 150, maxWidth: 220, isResizable: true },
-    { key: "POAmount", name: "POItem Amount", fieldName: "POAmount", minWidth: 140, maxWidth: 160, isResizable: true },
+    {
+      key: "POAmount", name: "POItem Amount", fieldName: "POAmount", minWidth: 140, maxWidth: 160, isResizable: true, onRender: (item) => {
+        const symbol = item.Currency ? getCurrencySymbol(item.Currency) : "";
+        const value = item.POItem_x0020_Value ?? 0;
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      }
+    },
   ];
 
   const poColumnsLine: IColumn[] = [
     { key: "POItem_x0020_Title", name: "POItem Title", fieldName: "POItem_x0020_Title", minWidth: 150, maxWidth: 220, isResizable: true },
-    { key: "POItem_x0020_Value", name: "POItem Amount", fieldName: "POItem_x0020_Value", minWidth: 140, maxWidth: 160, isResizable: true },
+    {
+      key: "POItem_x0020_Value", name: "POItem Amount", fieldName: "POItem_x0020_Value", minWidth: 140, maxWidth: 160, isResizable: true, onRender: (item) => {
+        const currencyCode = getCurrencyByPOID(selectedReq.PurchaseOrder, invoicePOs);
+        const symbol = getCurrencySymbol(currencyCode);
+        const value = item.POItem_x0020_Value ?? 0;
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      }
+    },
     // { key: "Comments", name: "Description", fieldName: "Comments", minWidth: 170, maxWidth: 270, isResizable: true }, // Optional
   ];
 
-
   // Columns for invoice requests grouped by PO:
+
+  const enrichedItems = sortedFilteredItems.map(po => {
+
+    return {
+      ...po,
+      InvoicedPercent: calculateInvoicedPercentForPO(po.PurchaseOrder, invoiceRequests),
+      POItemInvoicedPercent: calculateInvoicedPercentForPOItem(po.PurchaseOrder, po.POItem_x0020_Title, po.POItem_x0020_Value, invoiceRequests),
+    };
+  });
+
   const groupedInvColumns: IColumn[] = [
     { key: "POItem_x0020_Title", name: "PO Item Title", fieldName: "POItem_x0020_Title", minWidth: 150, maxWidth: 220, isResizable: true },
-    { key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 140, maxWidth: 160, isResizable: true },
+    {
+      key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 140, maxWidth: 160, isResizable: true, onRender: (item) => {
+        const symbol = item.Currency ? getCurrencySymbol(item.Currency) : "";
+        const value = item.POItem_x0020_Value ?? 0;
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      }
+    },
     {
       key: "InvoiceAmount",
       name: "Invoiced Amount",
@@ -745,9 +783,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       minWidth: 150,
       maxWidth: 160,
       isResizable: true,
-      onRender: (item) => item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "",
+      // onRender: (item) => item.InvoiceAmount ? item.InvoiceAmount.toLocaleString() : "",
+      onRender: (item) => {
+        const symbol = item.Currency ? getCurrencySymbol(item.Currency) : "";
+        const value = item.InvoiceAmount ?? 0;
+        return <span>{symbol} {Number(value).toLocaleString()}</span>;
+      }
     },
-    { key: "Invoice Status", name: "Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true },
+    { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 120, maxWidth: 160, isResizable: true },
     {
       key: "Created",
       name: "Created",
@@ -786,7 +829,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     },
     {
       key: "PMCommentsHistory",
-      name: "PM Comments History",
+      name: "PM Comments",
       fieldName: "PMCommentsHistory",
       minWidth: 200,
       maxWidth: 350,
@@ -806,7 +849,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   ];
   const fieldStyle = {
     root: { marginBottom: 8, display: 'flex' },
-    label: { fontWeight: 600, width: 180, color: '#626262', fontSize: 15 },
+    label: { fontWeight: 600, width: 180, color: primaryColor, fontSize: 15 },
     value: { fontWeight: 400, color: '#303030', fontSize: 15 }
   };
 
@@ -819,12 +862,16 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
 
   const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
     <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
-      <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600 } }}>Invoice Request Details</Text>
+      <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor } }} />
+      <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600, color: primaryColor } }}>Invoice Request Details</Text>
       <Separator />
 
       <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Title</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Title)}</div></div>
       <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Value)}</div></div>
       <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.POAmount)}</div></div>
+      <div style={{ ...fieldStyle.root }}><div style={{ ...fieldStyle.label }}>Invoiced % (PO)</div><div style={{ ...fieldStyle.value }}>{calculateInvoicedPercentForPO(invoice.PurchaseOrder, invoiceRequests).toFixed(0)}%</div></div>
+      <div style={{ ...fieldStyle.root }}><div style={{ ...fieldStyle.label }}>PO invoice Invoiced %</div><div style={{ ...fieldStyle.value }}>{calculateInvoicedPercentForPOItem(invoice.PurchaseOrder, invoice.POItem_x0020_Title, invoice.POItem_x0020_Value, invoiceRequests).toFixed(0)}%</div></div>
+
       <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
 
       <Separator />
@@ -901,6 +948,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     setFilterCurrentStatus("All");
     setFilterInvoiceStatus("All");
     setFilterFinanceStatus("All");
+    setInvoicePercentStatusFilter(null);
     setClearCounter(clearCounter + 1);
   };
 
@@ -1016,9 +1064,24 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       const matchesInvoiceStatus = !filterInvoiceStatus || filterInvoiceStatus === "All"
         ? true : item.Status === filterInvoiceStatus;
 
-      return matchesSearch && matchesProject && matchesCurrentStatus && matchesInvoiceStatus && matchesFinanceStatus;
+      const matchesInvoicePercent = !invoicePercentStatusFilter || invoicePercentStatusFilter === "All"
+        ? true
+        : (() => {
+          const percent = calculateInvoicedPercentForPO(item.PurchaseOrder, invoiceRequests);
+          const epsilon = 0.0001;
+          // if (invoicePercentStatusFilter === "NotPaid") return Math.abs(percent) < epsilon;
+          if (invoicePercentStatusFilter === "NotPaid")
+            return Math.abs(percent) < epsilon;
+          // if (invoicePercentStatusFilter === "Partially invoiced") return !(Math.abs(percent) < epsilon || Math.abs(percent - 100) < epsilon);
+          if (invoicePercentStatusFilter === "PartiallyInvoiced")
+            return percent > epsilon && percent < (100 - epsilon);
+          if (invoicePercentStatusFilter === "CompletelyInvoiced") return Math.abs(percent - 100) < epsilon;
+          // return true;
+        })();
+
+      return matchesSearch && matchesProject && matchesCurrentStatus && matchesInvoiceStatus && matchesInvoicePercent && matchesFinanceStatus;
     });
-  }, [invoiceRequests, searchText, filterProjectName, filterCurrentStatus, filterInvoiceStatus, filterFinanceStatus]);
+  }, [invoiceRequests, searchText, filterProjectName, filterCurrentStatus, filterInvoiceStatus, filterFinanceStatus, invoicePercentStatusFilter]);
 
   React.useEffect(() => {
     if (!filteredItems) return;
@@ -1030,7 +1093,10 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     setSortedFilteredItems(sorted);
   }, [filteredItems, sortedColumnKey, isSortedDescending]);
 
-
+  function getCurrencyByPOID(poID: string, mainPOs: Array<{ POID: string; Currency?: string }>): string {
+    const mainPO = mainPOs.find(po => po.POID === poID);
+    return mainPO?.Currency ?? '';  // fallback to empty string if not found
+  }
   async function loadProject(projectName?: string) {
     if (!projectName) {
       setSelectedProject(null);
@@ -1143,7 +1209,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       // Map 'Title' to POItem Title, 'Value' to POItem Value
       POItem_x0020_Title: g.poItem.Title,              // Displayed as POItem Title
       POItem_x0020_Value: g.poItem.Value,              // Displayed as POItem Value
-      Comments: g.poItem.Comments || "",               // Optional, use as Description or Comments
+      Comments: g.poItem.Comments || "",
     }));
   }
 
@@ -1152,21 +1218,33 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
 
     try {
 
-      let history: any[] = [];
-      if (selectedReq.PMCommentsHistory) {
+      const item = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedReq.Id).select('PMCommentsHistory')();
+
+      let history = [];
+      // if (item.PMCommentsHistory) {
+      //   try {
+      //     history = JSON.parse(formatCommentsHistory(item.PMCommentsHistory));
+      //     if (!Array.isArray(history)) history = [history];
+      //   } catch {
+      //     history = [];
+      //   }
+      // }
+      if (item.PMCommentsHistory) {
         try {
-          history = JSON.parse(selectedReq.PMCommentsHistory);
-          if (!Array.isArray(history)) history = [];
+          const decodedJson = decodeHtmlEntities(item.PMCommentsHistory);
+          history = JSON.parse(decodedJson);
+          if (!Array.isArray(history)) history = [history];
         } catch {
           history = [];
         }
       }
 
+      // Append new comment
       const userRole = await getCurrentUserRole(context, selectedReq);
       history.push({
         Date: new Date().toISOString(),
-        Title: "Clarification",
-        User: context.pageContext.user.displayName || "Unknown User",
+        Title: 'Clarification',
+        User: context.pageContext.user.displayName || 'Unknown User',
         Role: userRole,
         Data: clarifyComment,
       });
@@ -1210,6 +1288,43 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     return txt.value;
   }
 
+  function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    })
+      .formatToParts(1)
+      .find(part => part.type === 'currency')?.value || currencyCode;
+  }
+
+  function calculateInvoicedPercentForPO(
+    mainPOID: string,
+    invoiceRequests: InvoiceRequest[],
+  ): number {
+    const mainPO = invoicePOs.find(po => po.POID === mainPOID);
+    if (!mainPO) return 0;
+    const mainPOAmount = Number(mainPO.POAmount);
+    if (!mainPOAmount) return 0;
+
+    const totalInvoiced = invoiceRequests
+      .filter(inv => inv.PurchaseOrder === mainPOID && inv.Status?.toLowerCase() !== "cancelled")
+      .reduce((sum, inv) => sum + (inv.InvoiceAmount || 0), 0);  // use Amount here
+
+    return (totalInvoiced / mainPOAmount) * 100;
+  }
+
+  function calculateInvoicedPercentForPOItem(poID: string, poItemTitle: string, poItemAmount: number, invoiceRequests: InvoiceRequest[]): number {
+    if (!poItemAmount) return 0;
+
+    // Filter out cancelled and sum amounts for POItem with POID and POItem Title
+    const totalInvoiced = invoiceRequests
+      .filter(inv => inv.PurchaseOrder === poID && inv.POItem_x0020_Title === poItemTitle && inv.Status?.toLowerCase() !== "cancelled")
+      .reduce((sum, inv) => sum + (inv.InvoiceAmount || 0), 0);
+
+    return (totalInvoiced / poItemAmount) * 100;
+  }
 
   function getHierarchyForPO(
     mainPO: InvoicePO,
@@ -1426,7 +1541,13 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     const matchesProject = !filterProjectName || filterProjectName === "All" || item.ProjectName === filterProjectName;
     const matchesInvoiceStatus = !filterInvoiceStatus || filterInvoiceStatus === "All" || item.Status === filterInvoiceStatus;
     const matchesCurrentStatus = !filterCurrentStatus || filterCurrentStatus === "All" || item.CurrentStatus === filterCurrentStatus;
-
+    if (invoicePercentStatusFilter) {
+      // Calculate percent invoiced for this item's PurchaseOrder
+      const percent = calculateInvoicedPercentForPO(item.PurchaseOrder, invoiceRequests);
+      if (invoicePercentStatusFilter === "NotPaid" && percent !== 0) return false;
+      if (invoicePercentStatusFilter === "PartiallyInvoiced" && !(percent > 0 && percent < 100)) return false;
+      if (invoicePercentStatusFilter === "CompletelyInvoiced" && percent !== 100) return false;
+    }
     return matchesSearch && matchesProject && matchesInvoiceStatus && matchesCurrentStatus;
   });
 
@@ -1482,8 +1603,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
           setSelectedPOItem(
             selectedPO
               ? 'poItem' in selectedPO
-                ? { POID: selectedPO.poItem.Title, POAmount: selectedPO.poItem.Value }
-                : { POID: selectedPO.childPO.POID, POAmount: selectedPO.childPO.POAmount }
+                ? { POID: selectedPO.poItem.Title, POAmount: selectedPO.poItem.Value, Currency: selectedPO.poItem.Currency }
+                : { POID: selectedPO.childPO.POID, POAmount: selectedPO.childPO.POAmount, Currency: (selectedPO.childPO as any).Currency ?? "" }
               : null
           );
         } else {
@@ -1508,11 +1629,12 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   }
 
 
-  function normalizeSelectedPOItem(item: any): { POID: string, POAmount: string } | null {
+  function normalizeSelectedPOItem(item: any): { POID: string, POAmount: string, Currency: string } | null {
     if (!item) return null;
     return {
       POID: item.POID ?? item.POItem_x0020_Title,
-      POAmount: item.POAmount ?? item.POItem_x0020_Value
+      POAmount: item.POAmount ?? item.POItem_x0020_Value,
+      Currency: item.Currency ?? "",
     };
   }
 
@@ -1562,21 +1684,21 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
             />
           </div>
           <div>
-            {/* <Label>Invoice Status</Label> */}
-            {/* <Dropdown
-            placeholder="Invoice Status"
-            options={toDropdownOptions(statusOptions)}
-            selectedKey={filterStatus || undefined}
-            onChange={(e, option) => setFilterStatus(option?.key as string || "All")}
-            styles={{ root: { width: 160 } }}
-            ariaLabel="Invoice Status"
-          /> */}
             <Dropdown
               label="Invoice Status"
               options={[{ key: "All", text: "All" }, ...invoiceStatusOptions.map(status => ({ key: status, text: status }))]}
               selectedKey={filterInvoiceStatus ?? "All"}
               onChange={(e, option) => setFilterInvoiceStatus(option?.key === "All" ? undefined : option?.key as string)}
               placeholder="Invoice Status"
+              styles={dropdownStyles}
+            />
+          </div>
+          <div>
+            <Dropdown
+              label="Invoice % Status"
+              options={[{ key: "All", text: "All" }, ...invoicePercentStatusOptions]}
+              selectedKey={invoicePercentStatusFilter ?? "All"}
+              onChange={(e, option) => setInvoicePercentStatusFilter(option?.key === "All" ? null : String(option?.key))}
               styles={dropdownStyles}
             />
           </div>
@@ -1593,6 +1715,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
             title="Export to Excel"
             ariaLabel="Export to Excel"
             onClick={handleExportToExcel}
+            styles={{ root: { color: primaryColor } }}
           />
         </Stack>
       </div>
@@ -1607,7 +1730,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                   className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
                 >
                   <DetailsList
-                    items={sortedFilteredItems}
+                    items={enrichedItems}
                     columns={invoiceColumns}
                     isHeaderVisible={true}
                     setKey="invoiceRequestList"
@@ -1688,9 +1811,9 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                 <strong>All PO Items for {poHierarchy.mainPO.POID}</strong>
                 <DetailsList
                   items={getLineItemsList(poHierarchy)}
+                  onActiveItemChanged={(item) => setSelectedPOItem(normalizeSelectedPOItem(item))}
                   columns={poColumnsLine}
                   selectionMode={SelectionMode.single}
-                  onActiveItemChanged={(item) => setSelectedPOItem(normalizeSelectedPOItem(item))}
                   setKey="lineItemsList"
                   styles={{ root: { marginBottom: 16 } }}
                 />
@@ -1702,14 +1825,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     text={`Show all Invoice Requests`}
                     onClick={() => setSelectedPOItem(null)}
                     disabled={!selectedPOItem}
-                    style={{
-                      marginLeft: 12,
-                      color: "white",
-                      background: primaryColor,
-                      fontWeight: 600,
-                      borderRadius: 4,
-                      padding: "4px 16px"
-                    }}
+                    // style={{
+                    //   marginLeft: 12,
+                    //   // color: "white",
+                    //   // background: primaryColor,
+                    //   fontWeight: 600,
+                    //   borderRadius: 4,
+                    //   padding: "4px 16px"
+                    // }}
                   />
                 </div>
 
@@ -1838,7 +1961,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     disabled={clarifyLoading || clarifyInvoiceAmount === undefined}
                     onClick={handleClarifySubmit}
                     style={{
-                      background: '#20bb55',
+                      background: '#7d0c71',
                       color: '#fff',
                       padding: '8px 24px',
                       border: 'none',

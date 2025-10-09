@@ -3,7 +3,6 @@
   "id": "58a904e6-cb45-49c7-a996-4cfe11c8647e",
   "alias": "InvoiceTrackerWebPart",
   "componentType": "WebPart",
-
   "version": "*",
   "manifestVersion": 2,
   "requiresCustomScript": false,
@@ -17,7 +16,7 @@
   "supportsFullBleed": true,
   "preconfiguredEntries": [
     {
-      "groupId": "5c03119e-3074-46fd-976b-c60198311f70", 
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
       "group": {
         "default": "Advanced"
       },
@@ -30,7 +29,9 @@
       "officeFabricIconFontName": "Page",
       "properties": {
         "description": "InvoiceTracker"
-      }
+      },
+      "iconImageUrl": "./assets/Logo.png",
+      "fullPageAppIconImageUrl": "./assets/Logo.png"
     }
   ]
 }

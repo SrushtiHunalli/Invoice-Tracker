@@ -19,7 +19,7 @@ function DashboardCard({
   ariaLabel,
   onClick,
   iconName,
-  accentColor,
+  // accentColor,
   cardWidth,
   cardHeight,
   cardPadding
@@ -29,7 +29,7 @@ function DashboardCard({
   ariaLabel: string;
   onClick: () => void;
   iconName: string;
-  accentColor: string;
+  // accentColor: primaryColor;
   cardWidth: number | string;
   cardHeight: number | string;
   cardPadding: number | string;
@@ -60,7 +60,7 @@ function DashboardCard({
         cursor: "pointer",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px ${accentColor}22`;
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px ${primaryColor}22`;
         (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
       }}
       onMouseLeave={(e) => {
@@ -68,7 +68,7 @@ function DashboardCard({
         (e.currentTarget as HTMLElement).style.transform = "none";
       }}
     >
-      <Icon iconName={iconName} styles={{ root: { fontSize: 36, color: accentColor, marginBottom: 8 } }} />
+      <Icon iconName={iconName} styles={{ root: { fontSize: 36, color: primaryColor, marginBottom: 8 } }} />
       <div style={{ fontSize: 19, fontWeight: 600, color: "#222", marginBottom: 2, textAlign: "center" }}>
         {label}
       </div>
@@ -92,11 +92,12 @@ function DashboardCard({
     </div>
   );
 }
-
-export default function Home({ sp, context, onNavigate, primaryColor }: HomeProps) {
+const spTheme = (window as any).__themeState__?.theme;
+const primaryColor = spTheme?.themePrimary || "#0078d4";
+export default function Home({ sp, context, onNavigate}: HomeProps) {
   // const theme = getTheme();
   const spTheme = (window as any).__themeState__?.theme;
-  const accentColor = spTheme?.themePrimary || "#0078d4";
+  const primaryColor = spTheme?.themePrimary || "#0078d4";
   // const neutralColor = spTheme?.neutralPrimary || "#444";
 
   // const accentColor = primaryColor || theme.palette.themePrimary || "#2564cf";
@@ -251,7 +252,7 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
               ariaLabel={`Pending Requests: ${counts.pending}`}
               onClick={() => onCardClick("pending")}
               iconName="Edit"
-              accentColor={accentColor}
+              // accentColor={accentColor}
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -262,7 +263,7 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
               ariaLabel={`Pending Payment: ${counts.paymentPending}`}
               onClick={() => onCardClick("paymentPending")}
               iconName="Clock"
-              accentColor={accentColor}
+              // accentColor={accentColor}
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -273,7 +274,7 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
               ariaLabel={`Clarification Requests: ${counts.clarification}`}
               onClick={() => onCardClick("clarification")}
               iconName="WarningSolid"
-              accentColor={accentColor}
+              // accentColor={accentColor}
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -284,7 +285,7 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
               ariaLabel={`Payment Received: ${counts.paymentReceived}`}
               onClick={() => onCardClick("paymentReceived")}
               iconName="CheckMark"
-              accentColor={accentColor}
+              // accentColor={accentColor}
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -303,14 +304,14 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
           style={{
             margin: "54px auto 0",
             cursor: "pointer",
-            background: accentColor,
+            background: primaryColor,
             borderRadius: 32,
             padding: "18px 42px",
             display: "flex",
             alignItems: "center",
             color: "#fff",
             fontSize: 21,
-            boxShadow: `0 8px 32px ${accentColor}40`,
+            boxShadow: `0 8px 32px ${primaryColor}40`,
             fontWeight: 700,
             border: 0,
             outline: 0,
@@ -318,15 +319,15 @@ export default function Home({ sp, context, onNavigate, primaryColor }: HomeProp
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.background = "#174fb6";
-            (e.currentTarget as HTMLElement).style.boxShadow = `0 10px 34px ${accentColor}33`;
+            (e.currentTarget as HTMLElement).style.boxShadow = `0 10px 34px ${primaryColor}33`;
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = accentColor;
-            (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${accentColor}40`;
+            (e.currentTarget as HTMLElement).style.background = primaryColor;
+            (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${primaryColor}40`;
           }}
         >
           <span style={{ marginRight: 12 }}>Create Invoice Request</span>
-          <Icon iconName="Forward" styles={{ root: { fontSize: 25, fontWeight: 700 } }} />
+          <Icon iconName="Forward" styles={{ root: { fontSize: 25, fontWeight: 700} }} />
         </div>
       )}
     </div>
