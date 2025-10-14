@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import * as React from "react";
 import { useEffect, useState } from "react";
 import {
@@ -8,7 +10,7 @@ import {
   Panel, PanelType, SearchBox
 } from "office-ui-fabric-react";
 import { SPFI } from "@pnp/sp";
-
+// import { set } from "@microsoft/sp-lodash-subset";
 interface BusinessViewProps {
   sp: SPFI;
   context: any;
@@ -83,9 +85,7 @@ function formatCommentHistory(jsonStr?: string): string {
   if (!jsonStr) return "";
 
   try {
-    // Decode HTML entities before parsing JSON
     const decodedStr = decodeHtmlEntities(jsonStr);
-
     const arr = JSON.parse(decodedStr);
     if (!Array.isArray(arr)) return "";
 
@@ -99,7 +99,6 @@ function formatCommentHistory(jsonStr?: string): string {
       const data = entry.Data || entry.comment || "";
       return `[${date} ${time}]${user}${role} \n${title}:${data}`;
     }).join("\n\n");
-
   } catch (err) {
     console.error("Failed to format comment history", err, jsonStr);
     return "";
@@ -118,7 +117,7 @@ export default function BusinessView({
   const [error, setError] = useState<string | null>(null);
   const [poList, setPOList] = useState<InvoicePO[]>([]);
   const [reqList, setReqList] = useState<InvoiceRequest[]>([]);
-  const [totals, setTotals] = useState<any>({});
+  const [, setTotals] = useState<any>({});
   const [poPanel, setPoPanel] = useState<{
     open: boolean;
     po: InvoicePO | null;
@@ -126,228 +125,27 @@ export default function BusinessView({
     invoiceRequests: InvoiceRequest[];
   }>({ open: false, po: null, poItems: [], invoiceRequests: [] });
   const [projects, setProjects] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<IDropdownOption[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>("__all__");
+  const [, setDepartments] = useState<IDropdownOption[]>([]);
   const [searchText, setSearchText] = useState<string>("");
   const [invoiceRequestPanel, setInvoiceRequestPanel] = useState<{
     open: boolean;
     invoiceRequest: InvoiceRequest | null;
   }>({ open: false, invoiceRequest: null });
-
-  useEffect(() => {
-    async function loadProjects() {
-      const projectItems = await projectsp.web
-        .lists.getByTitle("Projects")
-        .items.select("Id", "Title", "Department")();
-      setProjects(projectItems);
-
-      // Extract unique departments
-      const uniqueDeps = Array.from(
-        new Set(projectItems.map((p) => p.Department).filter(Boolean))
-      );
-
-      // Map to dropdown options
-      const options: IDropdownOption[] = [
-        { key: "__all__", text: "All" },
-        ...uniqueDeps.map((dep) => ({
-          key: dep,
-          text: dep,
-        })),
-      ];
-      setDepartments(options);
-
-    }
-    loadProjects();
-  }, [projectsp]);
-
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const POData: InvoicePO[] = await sp.web.lists.getByTitle("InvoicePO").items();
-        const ReqData: InvoiceRequest[] = await sp.web
-          .lists.getByTitle("Invoice Requests")
-          .items.select(
-            "Id,PurchaseOrder,ProjectName,Status,CurrentStatus,InvoiceAmount,POItem_x0020_Title,POItem_x0020_Value,DueDate,POAmount,Currency,Created,Author/Title,Modified,Editor/Title,PMCommentsHistory,FinanceCommentsHistory,AttachmentFiles"
-          )
-          .expand("Author", "Editor", "AttachmentFiles")();
-        setPOList(POData);
-        setReqList(ReqData);
-
-        // Aggregates
-        const totalPOValue = POData.reduce((s, p) => s + (+p.POAmount || 0), 0);
-        const totalInvoiced = ReqData.filter(
-          (r) => r.Status && r.Status.toLowerCase() !== "cancelled"
-        ).reduce((s, r) => s + (+r.InvoiceAmount || 0), 0);
-
-        const outstanding = totalPOValue - totalInvoiced;
-
-        const paidPercent = totalPOValue > 0 ? (totalInvoiced / totalPOValue) * 100 : 0;
-
-        const overdueCount = ReqData.filter(
-          (r) => r.Status && r.Status.toLowerCase() === "pending payment"
-        ).length;
-        const statusMap: { [status: string]: number } = {};
-        ReqData.forEach((r) => {
-          const k = r.Status || "Unknown";
-          statusMap[k] = (statusMap[k] || 0) + 1;
-        });
-
-        setTotals({
-          totalPOValue,
-          totalInvoiced,
-          outstanding,
-          paidPercent,
-          overdueCount,
-          statusMap,
-        });
-      } catch (err: any) {
-        setError(err.message || String(err));
-      }
-      setLoading(false);
-    }
-    loadData();
-  }, [sp]);
-
-  const onDepartmentChange = (
-    event: React.FormEvent<HTMLDivElement>,
-    option?: IDropdownOption
-  ) => {
-    setSelectedDepartment(option?.key as string);
-  };
-
-  // Columns for main PO summary DetailsList
-  const columns: IColumn[] = [
-    { key: "poid", name: "PO ID", fieldName: "POID", minWidth: 90, maxWidth: 140 },
-    {
-      key: "poamount",
-      name: "PO Amount",
-      fieldName: "POAmount",
-      minWidth: 120,
-      maxWidth: 150,
-      onRender: (i) => getCurrencySymbol(i.Currency) + (+i.POAmount || 0).toLocaleString(),
-    },
-    { key: "project", name: "Project", fieldName: "ProjectName", minWidth: 120, maxWidth: 180 },
-    {
-      key: "invoiced",
-      name: "Invoiced",
-      fieldName: "invoiced",
-      minWidth: 110,
-      maxWidth: 130,
-      onRender: (i) =>
-        getCurrencySymbol(i.Currency) + ((+i.invoiced || 0).toLocaleString()),
-    },
-    {
-      key: "percent",
-      name: "Invoiced %",
-      fieldName: "percentPaid",
-      minWidth: 90,
-      maxWidth: 100,
-      onRender: (i) => ((i.percentPaid ?? 0).toFixed(0) + "%"),
-    },
-  ];
-
-  function openInvoiceRequestPanel(request: InvoiceRequest) {
-    setInvoiceRequestPanel({ open: true, invoiceRequest: request });
-  }
-
-  // Function to get PO items for a main PO - either from LineItemsJSON or children POs
-  function getPOItems(po: InvoicePO, allPOs: InvoicePO[]): POItem[] {
-    if (po.LineItemsJSON) {
-      try {
-        const items = JSON.parse(po.LineItemsJSON);
-        if (Array.isArray(items)) {
-          // Map to POItem structure safely
-          return items.map((item: any) => ({
-            POItem_x0020_Title: item.POItem_x0020_Title || item.Title || "-",
-            POItem_x0020_Value: +item.POItem_x0020_Value || +item.Value || 0,
-            POComments: item.POComments || item.Comments || "",
-            Currency: po.Currency,
-          }));
-        }
-      } catch {
-        // Failed to parse JSON, fallback to empty array
-      }
-    }
-
-    // If no LineItemsJSON, look for child POs by ParentPOID
-    const childPOs = allPOs.filter((p) => p.ParentPOID === po.POID);
-    if (childPOs.length > 0) {
-      return childPOs.map((child) => ({
-        POItem_x0020_Title: child.POID,
-        POItem_x0020_Value: child.POAmount || 0,
-        POComments: "",
-        Currency: child.Currency || po.Currency,
-      }));
-    }
-
-    // No line items or children, show main PO as single item
-    return [
-      {
-        POItem_x0020_Title: po.POID,
-        POItem_x0020_Value: po.POAmount || 0,
-        POComments: "",
-        Currency: po.Currency,
-      },
-    ];
-  }
-
-  // Calculate poSummary with invoiced values and percentages
-  const poSummary = poList.map((po) => {
-    const related = reqList.filter(
-      (r) => r.PurchaseOrder === po.POID && r.Status && r.Status.toLowerCase() !== "cancelled"
-    );
-    const invoiced = related.reduce((s, r) => s + (+r.InvoiceAmount || 0), 0);
-    return {
-      ...po,
-      invoiced,
-      percentPaid: !po.POAmount ? 0 : (invoiced / +po.POAmount) * 100,
-    };
-  });
-
-  // Filter by Department if selected
-  const searchFilteredPoSummary = poSummary.filter(po => poMatchesSearch(po, searchText));
-
-  const filteredPoSummary = (selectedDepartment && selectedDepartment !== "__all__"
-    ? searchFilteredPoSummary.filter((po: any) => {
-      const project = projects.find((p: any) => p.Title === po.ProjectName);
-      return project?.Department === selectedDepartment;
-    })
-    : searchFilteredPoSummary
-  ).filter(po => !po.ParentPOID);
-
-  // Open PO Panel handler
-  function openPoPanel(po: InvoicePO) {
-    const poItems = getPOItems(po, poList);
-    // Collect invoice requests for main PO and its child POs (if any)
-    const poIdsForRequests = [po.POID];
-    // Add child POIDs if any
-    poList.forEach((p) => {
-      if (p.ParentPOID === po.POID) poIdsForRequests.push(p.POID);
-    });
-
-    const invoiceRequests = reqList.filter((r) =>
-      poIdsForRequests.includes(r.PurchaseOrder)
-    );
-
-    setPoPanel({ open: true, po, poItems, invoiceRequests });
-  }
-
-  function poMatchesSearch(po: any, text: string): boolean {
-    if (!text) return true;
-    const lower = text.toLowerCase();
-    // Combine all searchable fields as strings, handle null/undefined
-    return [
-      po.POID,
-      po.ProjectName,
-      po.Currency,
-      po.POAmount,
-      po.invoiced,
-      (po.percentPaid ?? 0) + "%",
-    ]
-      .map(val => (val == null ? "" : val.toString().toLowerCase()))
-      .some(val => val.includes(lower));
-  }
+  const [userGroups, setUserGroups] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<string>("");
+  const [projectToTeamMap, setProjectToTeamMap] = useState<{ [projectTitle: string]: string }>({});
+  const [allowedTeams, setAllowedTeams] = useState<string[] | null>(null); // null means loading
+  const [, setTeams] = useState<IDropdownOption[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string>("__all__");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("__all__");
+  const [selectedBusinessUnit, setSelectedBusinessUnit] = useState<string>("__all__");
+  const [selectedBusiness, setSelectedBusiness] = useState<string>("__all__");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
+  const [selectedCurrentStatusFilter, setSelectedCurrentStatusFilter] = useState<string | null>(null);
+  const [filteredTeamSet, setFilteredTeamSet] = useState<Set<string>>(new Set());
+  const [filteredDepartmentSet, setFilteredDepartmentSet] = useState<Set<string>>(new Set());
+  const [filteredBusinessUnitSet, setFilteredBusinessUnitSet] = useState<Set<string>>(new Set());
+  const [filteredBusinessSet, setFilteredBusinessSet] = useState<Set<string>>(new Set());
 
   // Panel Columns for PO Items table
   const poItemColumns: IColumn[] = [
@@ -415,56 +213,700 @@ export default function BusinessView({
     },
   ];
 
-  if (loading) return <Spinner label="Loading dashboard..." />;
-  if (error) return <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>;
+  useEffect(() => {
+    async function loadUserGroups() {
+      try {
+        const groups = await sp.web.currentUser.groups();
+        const groupNames = groups.map(g => g.Title.toLowerCase());
+        setUserGroups(groupNames);
+      } catch (e) {
+        console.error("Failed to load user groups", e);
+      }
+    }
+    loadUserGroups();
+  }, [sp]);
+
+  useEffect(() => {
+    async function loadCurrentUser() {
+      const user = await sp.web.currentUser();
+      setCurrentUser(user.Title || user.LoginName || "");
+    }
+    loadCurrentUser();
+  }, [sp]);
+
+  useEffect(() => {
+    async function loadProjectsAndTeams() {
+      try {
+        // Fetch projects with PM expanded to get Id and Title
+        const projectsWithPM = await projectsp.web.lists.getByTitle("Projects")
+          .items
+          .select("Id", "Title", "Department", "PM/Id", "PM/Title", "PM/EMail")
+          .expand("PM")
+          .top(4999)();
+
+        // Query Employees list, expand the Team lookup field, and select MailID and Team/Title
+        const employees = await projectsp.web.lists.getByTitle("Employees")
+          .items
+          .select("MailID", "Team/Title")
+          .expand("Team")
+          .top(4999)();
+
+        // Map PM MailID to Team title (lookup value)
+        const pmMailIdToTeam = employees.reduce((acc: { [mailId: string]: string }, emp) => {
+          if (emp.MailID && emp.Team && emp.Team.Title) {
+            acc[emp.MailID.toLowerCase()] = emp.Team.Title;
+          }
+          return acc;
+        }, {});
+
+        // Build project to team map using direct PM email → Team title mapping
+        const projectTeamMap = projectsWithPM.reduce((acc: { [project: string]: string }, project) => {
+          const pmEmail = project.PM?.EMail?.toLowerCase();
+          const team = pmEmail ? pmMailIdToTeam[pmEmail] : "";
+          console.log(`Project: ${project.Title}, PM Email: ${pmEmail}, Team: ${team || '[none]'}`);
+          if (project.Title) {
+            acc[project.Title] = team;
+          }
+          return acc;
+        }, {});
+
+        setProjects(projectsWithPM);
+        setProjectToTeamMap(projectTeamMap);
+
+        // Identify allowed teams for current user by group role
+        const normalizedUser = currentUser.toLowerCase();
+
+        const allTCC = await projectsp.web.lists.getByTitle("Team Cost Center")
+          .items
+          .select("Title", "Manager/Id", "Manager/Title", "Manager/EMail", "Business", "Department", "BusinessUnit")
+          .expand("Manager")
+          .top(4999)();
+
+        let allowedTeamsForUser: string[] = [];
+
+        const addUnique = (arr: string[]) => {
+          allowedTeamsForUser = Array.from(new Set([...allowedTeamsForUser, ...arr]));
+        };
+
+        if (userGroups.includes("business manager")) {
+          const managedBusinesses = allTCC
+            .filter(row => row.Manager && row.Manager.Title.toLowerCase() === normalizedUser)
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          const teams = allTCC
+            .filter(row => managedBusinesses.includes(row.Business))
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          addUnique(teams);
+        }
+
+        // BUSINESS UNIT MANAGER
+        if (userGroups.includes("business unit manager")) {
+          const managedBusinessUnits = allTCC
+            .filter(row => row.Manager && row.Manager.Title.toLowerCase() === normalizedUser)
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          const teams = allTCC
+            .filter(row => managedBusinessUnits.includes(row.BusinessUnit))
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          addUnique(teams);
+        }
+
+        // DEPARTMENT MANAGER
+        if (userGroups.includes("department manager")) {
+          const managedDepartments = allTCC
+            .filter(row => row.Manager && row.Manager.Title.toLowerCase() === normalizedUser)
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          const teams = allTCC
+            .filter(row => managedDepartments.includes(row.Department))
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          addUnique(teams);
+        }
+
+        // TEAM MANAGER
+        if (userGroups.includes("team manager")) {
+          const teams = allTCC
+            .filter(row => row.Manager && row.Manager.Title.toLowerCase() === normalizedUser)
+            .map(row => row.Title)
+            .filter(Boolean);
+
+          addUnique(teams);
+        }
+
+        // DEFAULT (if no roles)
+        if (allowedTeamsForUser.length === 0) {
+          allowedTeamsForUser = [];
+        }
+
+        const classified = allTCC.reduce((acc: any, row: any) => {
+          const title = row.Title;
+          if (!title) return acc;
+          if (row.Business === title) {
+            acc.business.add(title);
+          } else if (row.BusinessUnit === title) {
+            acc.businessUnit.add(title);
+          } else if (row.Department === title) {
+            acc.department.add(title);
+          } else {
+            acc.team.add(title);
+          }
+          return acc;
+        }, { team: new Set<string>(), department: new Set<string>(), businessUnit: new Set<string>(), business: new Set<string>() });
+
+        const filteredTeamSet = new Set<string>(
+          Array.from(classified.team).filter(team => allowedTeamsForUser.includes(team as string)) as string[]
+        );
+        const filteredDepartmentSet = new Set<string>(
+          Array.from(classified.department).filter(dept => allowedTeamsForUser.includes(dept as string)) as string[]
+        );
+        const filteredBusinessUnitSet = new Set<string>(
+          Array.from(classified.businessUnit).filter(bu => allowedTeamsForUser.includes(bu as string)) as string[]
+        );
+        const filteredBusinessSet = new Set<string>(
+          Array.from(classified.business).filter(biz => allowedTeamsForUser.includes(biz as string)) as string[]
+        );
+
+        setFilteredTeamSet(filteredTeamSet);
+        setFilteredDepartmentSet(filteredDepartmentSet);
+        setFilteredBusinessUnitSet(filteredBusinessUnitSet);
+        setFilteredBusinessSet(filteredBusinessSet);
+        console.log("Allowed Teams for User:", allowedTeamsForUser);
+        setAllowedTeams(Array.from(new Set(allowedTeamsForUser)));
+      } catch (err) {
+        console.error("Error loading projects and roles", err);
+        setError(err.message || String(err));
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (userGroups.length > 0 && currentUser) {
+      loadProjectsAndTeams();
+    }
+  }, [userGroups, currentUser, projectsp]);
+
+
+  const teamOptions: IDropdownOption[] =
+    [{ key: 'all', text: 'All' }]
+      .concat(Array.from(filteredTeamSet).map(team => ({ key: String(team), text: String(team) })));
+
+  const departmentOptions: IDropdownOption[] =
+    [{ key: 'all', text: 'All' }]
+      .concat(Array.from(filteredDepartmentSet).map(dept => ({ key: String(dept), text: String(dept) })));
+
+  const businessUnitOptions: IDropdownOption[] =
+    [{ key: 'all', text: 'All' }]
+      .concat(Array.from(filteredBusinessUnitSet).map(bu => ({ key: String(bu), text: String(bu) })));
+
+  const businessOptions: IDropdownOption[] =
+    [{ key: 'all', text: 'All' }]
+      .concat(Array.from(filteredBusinessSet).map(biz => ({ key: String(biz), text: String(biz) })));
+
+  useEffect(() => {
+    async function loadProjects() {
+      const projectItems = await projectsp.web
+        .lists.getByTitle("Projects")
+        .items.select("Id", "Title", "Department")
+        .top(4999)();
+      setProjects(projectItems);
+
+      // Extract unique departments
+      const uniqueDeps = Array.from(
+        new Set(projectItems.map((p) => p.Department).filter(Boolean))
+      );
+
+      // Map to dropdown options
+      const options: IDropdownOption[] = [
+        { key: "__all__", text: "All" },
+        ...uniqueDeps.map((dep) => ({
+          key: dep,
+          text: dep,
+        })),
+      ];
+      setDepartments(options);
+    }
+    loadProjects();
+  }, [projectsp]);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const POData: InvoicePO[] = await sp.web.lists.getByTitle("InvoicePO").items();
+        const ReqData: InvoiceRequest[] = await sp.web
+          .lists.getByTitle("Invoice Requests")
+          .items.select(
+            "Id,PurchaseOrder,ProjectName,Status,CurrentStatus,InvoiceAmount,POItem_x0020_Title,POItem_x0020_Value,DueDate,POAmount,Currency,Created,Author/Title,Modified,Editor/Title,PMCommentsHistory,FinanceCommentsHistory,AttachmentFiles"
+          )
+          .expand("Author", "Editor", "AttachmentFiles")();
+        setPOList(POData);
+        setReqList(ReqData);
+
+        // Aggregates
+        const totalPOValue = POData.reduce((s, p) => s + (+p.POAmount || 0), 0);
+        const totalInvoiced = ReqData.filter(
+          (r) => r.Status && r.Status.toLowerCase() !== "cancelled"
+        ).reduce((s, r) => s + (+r.InvoiceAmount || 0), 0);
+
+        const outstanding = totalPOValue - totalInvoiced;
+
+        const paidPercent = totalPOValue > 0 ? (totalInvoiced / totalPOValue) * 100 : 0;
+
+        const overdueCount = ReqData.filter(
+          (r) => r.Status && r.Status.toLowerCase() === "pending payment"
+        ).length;
+        const statusMap: { [status: string]: number } = {};
+        ReqData.forEach((r) => {
+          const k = r.Status || "Unknown";
+          statusMap[k] = (statusMap[k] || 0) + 1;
+        });
+
+        setTotals({
+          totalPOValue,
+          totalInvoiced,
+          outstanding,
+          paidPercent,
+          overdueCount,
+          statusMap,
+        });
+      } catch (err: any) {
+        setError(err.message || String(err));
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, [sp]);
+
+  // Memoized filtered projects based on allowed teams
+  const filteredProjectsByTeam = React.useMemo(() => {
+    if (allowedTeams === null) return [];
+    if (!allowedTeams.length) return [];
+    return projects.filter(proj => {
+      const team = projectToTeamMap[proj.Title];
+      return allowedTeams.includes(team);
+    });
+  }, [projects, projectToTeamMap, allowedTeams]);
+
+  // const teamOptions: IDropdownOption[] = React.useMemo(() => {
+  //   if (!allowedTeams) return [];
+  //   return allowedTeams.map((team) => ({ key: team, text: team }));
+  // }, [allowedTeams]);
+
+  // Apply department filter to filtered projects
+  const departmentFilteredProjects = React.useMemo(() => {
+    if (allowedTeams === null) return [];
+
+    let projs = filteredProjectsByTeam;
+
+    if (selectedDepartment && selectedDepartment !== "__all__") {
+      projs = projs.filter(p => p.Department === selectedDepartment);
+    }
+
+    if (selectedTeam && selectedTeam !== "__all__") {
+      projs = projs.filter(p => projectToTeamMap[p.Title] === selectedTeam);
+    }
+
+    return projs;
+  }, [filteredProjectsByTeam, selectedDepartment, selectedTeam, projectToTeamMap, allowedTeams]);
+
+
+  const filteredPOList = React.useMemo(() => {
+    console.log("Filtering PO List with allowedTeams:", allowedTeams);
+    if (allowedTeams === null) {
+      console.log("allowedTeams still null - returning empty PO list");
+      return [];
+    }
+    if (!allowedTeams.length) {
+      console.log("allowedTeams empty - returning empty PO list");
+      return [];
+    }
+    const filtered = poList.filter(po => {
+      const team = projectToTeamMap[po.ProjectName];
+      const allowed = allowedTeams.includes(team);
+      console.log("Allowed Teams:", allowedTeams);
+      console.log(`PO ${po.POID} with ProjectName ${po.ProjectName} maps to team ${team}, allowed: ${allowed}`);
+      return allowed;
+    });
+    console.log(`Filtered PO List count: ${filtered.length}`);
+    return filtered;
+  }, [poList, projectToTeamMap, allowedTeams]);
+
+  // Create PO summary with invoiced and percentage values
+  const poSummary = React.useMemo(() => {
+    return filteredPOList.map(po => {
+      const related = reqList.filter(
+        r => r.PurchaseOrder === po.POID && r.Status && r.Status.toLowerCase() !== "cancelled"
+      );
+      const invoiced = related.reduce((s, r) => s + (+r.InvoiceAmount || 0), 0);
+      const paid = related
+        .filter(r => r.Status?.toLowerCase() === "payment received")
+        .reduce((s, r) => s + (+r.InvoiceAmount || 0), 0);
+      return {
+        ...po,
+        invoiced,
+        paidAmount: paid,
+        percentPaid: !po.POAmount ? 0 : (invoiced / +po.POAmount) * 100,
+      };
+    });
+  }, [filteredPOList, reqList]);
+
+  // Search filter on PO summary
+  const searchFilteredPoSummary = React.useMemo(() => {
+    return poSummary.filter(po => poMatchesSearch(po, searchText));
+  }, [poSummary, searchText]);
+
+  const filteredPoSummary = React.useMemo(() => {
+    if (allowedTeams === null) return [];
+    return searchFilteredPoSummary.filter(po => {
+      const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
+      return !!matchingProject;
+    }).filter(po => !po.ParentPOID);
+  }, [searchFilteredPoSummary, departmentFilteredProjects, allowedTeams]);
+
+  const filteredPoSummaryWithStatusFilter = React.useMemo(() => {
+    if (!filteredPoSummary || filteredPoSummary.length === 0) return [];
+
+    if (!selectedStatusFilter && !selectedCurrentStatusFilter) {
+      return filteredPoSummary;
+    }
+
+    return filteredPoSummary.filter(po => {
+      // Get related invoice requests for this PO
+      const relatedReqs = reqList.filter(req =>
+        req.PurchaseOrder === po.POID &&
+        (!selectedStatusFilter || req.Status === selectedStatusFilter) &&
+        (!selectedCurrentStatusFilter || req.CurrentStatus === selectedCurrentStatusFilter) &&
+        req.Status?.toLowerCase() !== "cancelled"
+      );
+
+      // Only include this PO if it has any related invoice requests passing the filter
+      return relatedReqs.length > 0;
+    });
+  }, [filteredPoSummary, reqList, selectedStatusFilter, selectedCurrentStatusFilter]);
+
+  const filteredInvoiceRequests = React.useMemo(() => {
+    if (!filteredPoSummary || filteredPoSummary.length === 0) return [];
+
+    const visiblePOIDs = new Set(filteredPoSummary.map(po => po.POID));
+
+    let filtered = reqList.filter(req => req.PurchaseOrder && visiblePOIDs.has(req.PurchaseOrder));
+
+    if (selectedStatusFilter) {
+      filtered = filtered.filter(req => (req.Status ?? "Unknown") === selectedStatusFilter);
+    }
+
+    if (selectedCurrentStatusFilter) {
+      filtered = filtered.filter(req => (req.CurrentStatus ?? "Unknown") === selectedCurrentStatusFilter);
+    }
+
+    return filtered;
+  }, [filteredPoSummary, reqList, selectedStatusFilter, selectedCurrentStatusFilter]);
+
+  const filteredStatusMap = React.useMemo(() => {
+    const statusCounts: { [status: string]: number } = {};
+    filteredInvoiceRequests.forEach(req => {
+      const key = req.Status || "Unknown";
+      statusCounts[key] = (statusCounts[key] || 0) + 1;
+    });
+    return statusCounts;
+  }, [filteredInvoiceRequests]);
+
+  const filteredCurrentStatusMap = React.useMemo(() => {
+    const currentStatusCounts: { [currentStatus: string]: number } = {};
+    filteredInvoiceRequests.forEach(req => {
+      const key = req.CurrentStatus || "Unknown";
+      currentStatusCounts[key] = (currentStatusCounts[key] || 0) + 1;
+    });
+    return currentStatusCounts;
+  }, [filteredInvoiceRequests]);
+
+  // PO details screen open handler
+  function openInvoiceRequestPanel(request: InvoiceRequest) {
+    setInvoiceRequestPanel({ open: true, invoiceRequest: request });
+  }
+
+  const projectsInDetailList = React.useMemo(() => {
+    if (!filteredPoSummary || filteredPoSummary.length === 0) {
+      return [];
+    }
+
+    const poProjectNames = new Set(filteredPoSummary.map(po => po.ProjectName));
+    return projects.filter(proj => poProjectNames.has(proj.Title));
+  }, [filteredPoSummary, projects]);
+
+  useEffect(() => {
+    if (projectsInDetailList.length === 0) {
+      setDepartments([{ key: "__all__", text: "All" }]);
+      return;
+    }
+
+    const uniqueDepartments = Array.from(
+      new Set(projectsInDetailList.map(p => p.Department).filter(Boolean))
+    );
+
+    const options: IDropdownOption[] = [
+      { key: "__all__", text: "All" },
+      ...uniqueDepartments.map(dep => ({ key: dep, text: dep })),
+    ];
+
+    setDepartments(options);
+  }, [projectsInDetailList]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      setTeams([{ key: "__all__", text: "All" }]);
+      return;
+    }
+
+    const uniqueTeams = Array.from(
+      new Set(
+        projectsInDetailList
+          .map(p => projectToTeamMap[p.Title])
+          .filter(Boolean)
+      )
+    );
+
+    const options: IDropdownOption[] = [
+      { key: "__all__", text: "All" },
+      ...uniqueTeams.map(team => ({ key: team, text: team })),
+    ];
+
+    setTeams(options);
+  }, [projectsInDetailList, projectToTeamMap]);
+
+  // Get PO items function
+  function getPOItems(po: InvoicePO, allPOs: InvoicePO[]): POItem[] {
+    if (po.LineItemsJSON) {
+      try {
+        const items = JSON.parse(po.LineItemsJSON);
+        if (Array.isArray(items)) {
+          return items.map((item: any) => ({
+            POItem_x0020_Title: item.POItem_x0020_Title || item.Title || "-",
+            POItem_x0020_Value: +item.POItem_x0020_Value || +item.Value || 0,
+            POComments: item.POComments || item.Comments || "",
+            Currency: po.Currency,
+          }));
+        }
+      } catch {
+        // Ignore parse errors, fallback empty array
+      }
+    }
+    // Check for child POs
+    const childPOs = allPOs.filter(p => p.ParentPOID === po.POID);
+    if (childPOs.length > 0) {
+      return childPOs.map(child => ({
+        POItem_x0020_Title: child.POID,
+        POItem_x0020_Value: child.POAmount || 0,
+        POComments: "",
+        Currency: child.Currency || po.Currency,
+      }));
+    }
+    // Single PO item fallback
+    return [{
+      POItem_x0020_Title: po.POID,
+      POItem_x0020_Value: po.POAmount || 0,
+      POComments: "",
+      Currency: po.Currency,
+    }];
+  }
+
+  // PO panel open handler
+  function openPoPanel(po: InvoicePO) {
+    const poItems = getPOItems(po, poList);
+    const poIdsForRequests = [po.POID];
+    poList.forEach(p => {
+      if (p.ParentPOID === po.POID) poIdsForRequests.push(p.POID);
+    });
+    const invoiceRequests = reqList.filter(r => poIdsForRequests.includes(r.PurchaseOrder));
+    setPoPanel({ open: true, po, poItems, invoiceRequests });
+  }
+
+  // Search helper
+  function poMatchesSearch(po: any, text: string): boolean {
+    if (!text) return true;
+    const lower = text.toLowerCase();
+    return [
+      po.POID,
+      po.ProjectName,
+      po.Currency,
+      po.POAmount,
+      po.invoiced,
+      (po.percentPaid ?? 0) + "%",
+    ].some(val => (val == null ? "" : val.toString().toLowerCase()).includes(lower));
+  }
+
+  // Columns definition
+  const columns: IColumn[] = [
+    { key: "poid", name: "PO ID", fieldName: "POID", minWidth: 90, maxWidth: 140 },
+    {
+      key: "poamount",
+      name: "PO Amount",
+      fieldName: "POAmount",
+      minWidth: 120,
+      maxWidth: 150,
+      onRender: (i) => getCurrencySymbol(i.Currency) + (+i.POAmount || 0).toLocaleString(),
+    },
+    { key: "project", name: "Project", fieldName: "ProjectName", minWidth: 120, maxWidth: 180 },
+    {
+      key: "invoiced",
+      name: "Invoiced",
+      fieldName: "invoiced",
+      minWidth: 110,
+      maxWidth: 130,
+      onRender: (i) => getCurrencySymbol(i.Currency) + ((+i.invoiced || 0).toLocaleString()),
+    },
+    {
+      key: "paidamount",
+      name: "Paid Amount",
+      fieldName: "paidAmount",
+      minWidth: 120,
+      maxWidth: 150,
+      onRender: (item) =>
+        getCurrencySymbol(item.Currency) + ((item.paidAmount ?? 0).toLocaleString()),
+    },
+    {
+      key: "percent",
+      name: "Invoiced %",
+      fieldName: "percentPaid",
+      minWidth: 90,
+      maxWidth: 100,
+      onRender: (i) => ((i.percentPaid ?? 0).toFixed(0) + "%"),
+    },
+
+  ];
+
+  if (loading || allowedTeams === null)
+    return <Spinner label="Loading..." />;
+
+  if (error)
+    return <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>;
 
   return (
-    <Stack
-      tokens={{ childrenGap: 28 }}
-      styles={{ root: { padding: 32, background: "#fafafa", minHeight: 600 } }}
-    >
+    <Stack tokens={{ childrenGap: 28 }} styles={{ root: { padding: 32, background: "#fafafa", minHeight: 600 } }}>
       <Separator />
       <Stack horizontal tokens={{ childrenGap: 24, padding: 0 }} styles={{ root: { marginBottom: 16 } }}>
+        {/* <div>
+          <Text styles={{ root: { marginBottom: 16 } }}>Search</Text>
+          <SearchBox
+            placeholder="Search"
+            value={searchText}
+            onChange={(_, newValue) => setSearchText(newValue ?? "")}
+            styles={{ root: { maxWidth: 300 } }}
+          />
+        </div> */}
         <SearchBox
-          placeholder="Search"
+          placeholder="Search projects"
           value={searchText}
           onChange={(_, newValue) => setSearchText(newValue ?? "")}
-          styles={{ root: { maxWidth: 300 } }}
+          styles={{ root: { width: 300 } }}
         />
         <Dropdown
-          placeholder="Filter by Department"
-          // label="Department"
-          options={departments}
+          placeholder="Team"
+          options={teamOptions}
+          selectedKey={selectedTeam}
+          onChange={(_, option) => setSelectedTeam(option?.key as string || "all")}
+          styles={{ root: { width: 150 } }}
+        />
+        <Dropdown
+          placeholder="Department"
+          options={departmentOptions}
           selectedKey={selectedDepartment}
-          onChange={onDepartmentChange}
-          styles={{ root: { minWidth: 300 } }}
+          onChange={(_, option) => setSelectedDepartment(option?.key as string || "all")}
+          styles={{ root: { width: 150 } }}
+        />
+        <Dropdown
+          placeholder="Business Unit"
+          options={businessUnitOptions}
+          selectedKey={selectedBusinessUnit}
+          onChange={(_, option) => setSelectedBusinessUnit(option?.key as string || "all")}
+          styles={{ root: { width: 150 } }}
+        />
+        <Dropdown
+          placeholder="Business"
+          options={businessOptions}
+          selectedKey={selectedBusiness}
+          onChange={(_, option) => setSelectedBusiness(option?.key as string || "all")}
+          styles={{ root: { width: 150 } }}
         />
       </Stack>
       <Stack>
         <Text variant="large" styles={{ root: { fontWeight: 600, marginBottom: 6 } }}>
-          Invoice Status Breakdown
+          Invoice Status
         </Text>
         <Stack horizontal tokens={{ childrenGap: 16 }}>
-          {Object.entries(totals.statusMap ?? {}).map(([status, count]) => (
-            <Stack
-              key={status}
-              styles={{
-                root: {
-                  minWidth: 100,
-                  background: "#fff",
-                  borderRadius: 6,
-                  boxShadow: "0 2px 7px #f6f6f6",
-                  padding: "10px 14px",
-                  margin: "6px 0",
-                },
-              }}
-            >
-              <Text variant="mediumPlus" styles={{ root: { fontWeight: 700 } }}>
-                {count}
-              </Text>
-              <div style={{ color: "#666" }}>{status}</div>
-            </Stack>
-          ))}
+          {Object.entries(filteredStatusMap ?? {}).map(([status, count]) => {
+            const isSelected = selectedStatusFilter === status;
+            return (
+              <Stack
+                key={status}
+                onClick={() => {
+                  setSelectedStatusFilter(isSelected ? null : status);
+                  setSelectedCurrentStatusFilter(null); // Clear other filter if needed
+                }}
+                styles={{
+                  root: {
+                    minWidth: 100,
+                    background: isSelected ? "#d0e7ff" : "#fff",
+                    borderRadius: 6,
+                    boxShadow: "0 2px 7px #f6f6f6",
+                    padding: "10px 14px",
+                    margin: "6px 0",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  },
+                }}
+              >
+                <Text variant="mediumPlus" styles={{ root: { fontWeight: 700 } }}>
+                  {count}
+                </Text>
+                <div style={{ color: "#666" }}>{status}</div>
+              </Stack>
+            );
+          })}
+        </Stack>
+      </Stack>
+      <Stack>
+        <Text variant="large" styles={{ root: { fontWeight: 600, marginTop: 28, marginBottom: 6 } }}>
+          Current Status
+        </Text>
+        <Stack horizontal tokens={{ childrenGap: 16 }}>
+          {Object.entries(filteredCurrentStatusMap ?? {}).map(([currentStatus, count]) => {
+            const isSelected = selectedCurrentStatusFilter === currentStatus;
+            return (
+              <Stack
+                key={currentStatus}
+                onClick={() => {
+                  setSelectedCurrentStatusFilter(isSelected ? null : currentStatus);
+                  setSelectedStatusFilter(null); // Clear other filter if needed
+                }}
+                styles={{
+                  root: {
+                    minWidth: 100,
+                    background: isSelected ? "#d0e7ff" : "#fff",
+                    borderRadius: 6,
+                    boxShadow: "0 2px 7px #f6f6f6",
+                    padding: "10px 14px",
+                    margin: "6px 0",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  },
+                }}
+              >
+                <Text variant="mediumPlus" styles={{ root: { fontWeight: 700 } }}>
+                  {count}
+                </Text>
+                <div style={{ color: "#666" }}>{currentStatus}</div>
+              </Stack>
+            );
+          })}
         </Stack>
       </Stack>
       <Separator />
@@ -472,7 +914,7 @@ export default function BusinessView({
         All Purchase Orders (Summary)
       </Text>
       <DetailsList
-        items={filteredPoSummary}
+        items={filteredPoSummaryWithStatusFilter}
         columns={columns}
         compact
         isHeaderVisible
@@ -481,156 +923,187 @@ export default function BusinessView({
         selectionMode={0}
         onActiveItemChanged={openPoPanel}
       />
-
-      {/* PO Details Panel */}
-      {/* <Panel
-        isOpen={poPanel.open}
-        onDismiss={() => setPoPanel({ open: false, po: null, poItems: [], invoiceRequests: [] })}
-        headerText={`Invoice Details for PO: ${poPanel.po?.POID ?? ""}`}
-        closeButtonAriaLabel="Close"
-        isLightDismiss
-        type={PanelType.largeFixed}
-        styles={{ main: { maxWidth: 1000 } }}
-      >
-        {poPanel.po && (
-          <Stack tokens={{ childrenGap: 20 }} styles={{ root: { padding: 10 } }}>
-            <Stack horizontal tokens={{ childrenGap: 18 }} wrap>
-              <Stack>
-                <Text variant="mediumPlus">
-                  <b>Purchase Order:</b> {poPanel.po.POID}
-                </Text>
-                <Text variant="mediumPlus">
-                  <b>Project Name:</b> {poPanel.po.ProjectName}
-                </Text>
-                <Text variant="mediumPlus">
-                  <b>PO Amount:</b> {getCurrencySymbol(poPanel.po.Currency)}
-                  {(poPanel.po.POAmount ?? 0).toLocaleString()}
-                </Text>
-              </Stack>
-            </Stack>
-
-            <Separator />
-            <Text variant="mediumPlus" styles={{ root: { fontWeight: 600 } }}>
-              PO Items
-            </Text>
-            <DetailsList
-              items={poPanel.poItems}
-              columns={poItemColumns}
-              compact
-              isHeaderVisible
-            />
-
-            <Separator />
-            <Stack horizontal tokens={{ childrenGap: 10 }} verticalAlign="center" styles={{ root: { marginBottom: 8, marginTop: 10 } }}>
-              <Text variant="mediumPlus">
-                Invoice Requests for PO {poPanel.po.POID}
-              </Text>
-              {/* Add button if needed to show all */}
-      {/* <PrimaryButton text="Show all Invoice Requests" /> */}
-      {/* </Stack>
-
-            {poPanel.invoiceRequests.length > 0 ? (
-              <DetailsList
-                items={poPanel.invoiceRequests}
-                columns={invoiceColumns}
-                compact
-                isHeaderVisible
-                onActiveItemChanged={openInvoiceRequestPanel}
-              />
-
-            ) : (
-              <Text>No invoice requests for this POID</Text>
-            )}
-          </Stack>
-        )}
-      </Panel> */}
-
       <Panel
         isOpen={poPanel.open}
-        onDismiss={() => setPoPanel({ open: false, po: null, poItems: [], invoiceRequests: [] })}
-        headerText={poPanel.po ? `Invoice Details for PO: ${poPanel.po.POID}` : ""}
+        onDismiss={() =>
+          setPoPanel({ open: false, po: null, poItems: [], invoiceRequests: [] })
+        }
         closeButtonAriaLabel="Close"
         isLightDismiss
         type={PanelType.largeFixed}
         styles={{ main: { maxWidth: 1000 } }}
       >
         {poPanel.po && (
-          <Stack tokens={{ childrenGap: 24 }} styles={{ root: { padding: 18, background: "#f4f9fc", borderRadius: 12, minHeight: 700 } }}>
-            {/* PO Summary */}
-            <div style={{
-              background: "#fff",
-              borderRadius: 8,
-              padding: "18px 26px 10px",
-              boxShadow: "0 1px 7px #ebecf0",
-              marginBottom: 14
-            }}>
-              <Stack horizontal tokens={{ childrenGap: 50 }}>
-                <Stack>
-                  <Text variant="medium" styles={{ root: { marginTop: 6 } }}>
-                    <span style={{ fontWeight: 600, color: primaryColor }}>Purchase Order:</span> {poPanel.po.POID}
-                  </Text>
-                  <Text variant="medium" styles={{ root: { marginTop: 6 } }}>
-                    <span style={{ fontWeight: 600, color: primaryColor }}>Project Name:</span> {poPanel.po.ProjectName}
-                  </Text>
-                  <Text variant="medium" styles={{ root: { marginTop: 5 } }}>
-                    <span style={{ fontWeight: 600, color: primaryColor }}>PO Amount:</span>
-                    {" "}{getCurrencySymbol(poPanel.po.Currency)}
-                    {(poPanel.po.POAmount ?? 0).toLocaleString()}
-                  </Text>
-                  {/* Add more summary fields as needed */}
-                </Stack>
-              </Stack>
-            </div>
-
-            <Text variant="large" styles={{ root: { fontWeight: 600, marginTop: 4, marginBottom: 0, color: primaryColor } }}>
-              PO Items
-            </Text>
-            {/* PO Item List */}
-            <div style={{
-              background: "#fff",
-              borderRadius: 7,
-              padding: 18,
-              marginBottom: 10,
-              boxShadow: "0 1px 6px #f1f2f8"
-            }}>
-              <DetailsList
-                items={poPanel.poItems}
-                columns={poItemColumns}
-                compact
-                isHeaderVisible
-                styles={{
-                  root: { background: "transparent" }
+          <Stack
+            tokens={{ childrenGap: 24 }}
+            styles={{
+              root: {
+                padding: 24,
+                background: '#f5f9fc',
+                borderRadius: 12,
+                minHeight: 700,
+              },
+            }}
+          >
+            {/* --- Summary Card --- */}
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: 10,
+                padding: '22px 28px',
+                boxShadow: '0 3px 10px rgba(0,0,0,0.05)',
+                borderLeft: `6px solid ${primaryColor}`,
+              }}
+            >
+              <Text
+                variant="xLarge"
+                styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 20 } }}
+              >
+                Purchase Order Summary
+              </Text>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  rowGap: '16px',
+                  columnGap: '40px',
                 }}
-              />
+              >
+                <div>
+                  <Text><b>Purchase Order:</b> {poPanel.po.POID}</Text>
+                </div>
+                <div>
+                  <Text><b>Invoiced Amount:</b> {getCurrencySymbol(poPanel.po.Currency)}{poPanel.po.invoiced?.toLocaleString()}</Text>
+                </div>
+                <div>
+                  <Text><b>Paid Amount:</b> {getCurrencySymbol(poPanel.po.Currency)}{poPanel.po.paidAmount?.toLocaleString()}</Text>
+                </div>
+
+                <div>
+                  <Text><b>Project Name:</b> {poPanel.po.ProjectName}</Text>
+                </div>
+                <div>
+                  <Text><b>PO Amount:</b> {getCurrencySymbol(poPanel.po.Currency)}{poPanel.po.POAmount?.toLocaleString()}</Text>
+                </div>
+                <div>
+                  <Text>
+                    <b>Invoiced %:</b>{' '}
+                    <span
+                      style={{
+                        color:
+                          poPanel.po.percentPaid >= 100
+                            ? '#28a745'
+                            : poPanel.po.percentPaid >= 50
+                              ? '#f5a623'
+                              : '#0078d4',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {poPanel.po.percentPaid?.toFixed(0)}%
+                    </span>
+                  </Text>
+                </div>
+              </div>
             </div>
 
-            <Text variant="large" styles={{ root: { fontWeight: 600, marginTop: 4, color: primaryColor } }}>
-              Invoice Requests for PO {poPanel.po.POID}
-            </Text>
-            {/* Invoice Requests */}
-            <div style={{
-              background: "#fff",
-              borderRadius: 7,
-              padding: 18,
-              marginBottom: 2,
-              boxShadow: "0 1px 6px #ecedfc"
-            }}>
-              {poPanel.invoiceRequests.length > 0 ? (
+            {/* --- PO Items Table --- */}
+            <Stack>
+              <Text
+                variant="large"
+                styles={{
+                  root: {
+                    fontWeight: 600,
+                    color: primaryColor,
+                    marginBottom: 8,
+                    borderBottom: `2px solid ${primaryColor}`,
+                    width: 'fit-content',
+                    paddingBottom: 4,
+                  },
+                }}
+              >
+                PO Items
+              </Text>
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 8,
+                  padding: 14,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                }}
+              >
                 <DetailsList
-                  items={poPanel.invoiceRequests}
-                  columns={invoiceColumns}
+                  items={poPanel.poItems}
+                  columns={poItemColumns}
                   compact
                   isHeaderVisible
-                  onActiveItemChanged={openInvoiceRequestPanel}
-                  styles={{ root: { background: "transparent" } }}
+                  styles={{
+                    root: {
+                      background: 'transparent',
+                      selectors: {
+                        '.ms-DetailsRow:hover': {
+                          background: '#f3f8fe !important',
+                        },
+                      },
+                    },
+                  }}
                 />
-              ) : (
-                <Text styles={{ root: { color: "#888" } }}>No invoice requests for this POID</Text>
-              )}
-            </div>
+              </div>
+            </Stack>
+
+            {/* --- Invoice Requests Table --- */}
+            <Stack>
+              <Text
+                variant="large"
+                styles={{
+                  root: {
+                    fontWeight: 600,
+                    color: primaryColor,
+                    marginBottom: 8,
+                    borderBottom: `2px solid ${primaryColor}`,
+                    width: 'fit-content',
+                    paddingBottom: 4,
+                  },
+                }}
+              >
+                Invoice Requests for PO {poPanel.po.POID}
+              </Text>
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 8,
+                  padding: 14,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                }}
+              >
+                {poPanel.invoiceRequests.length > 0 ? (
+                  <DetailsList
+                    items={poPanel.invoiceRequests}
+                    columns={invoiceColumns}
+                    compact
+                    isHeaderVisible
+                    onActiveItemChanged={openInvoiceRequestPanel}
+                    styles={{
+                      root: {
+                        background: 'transparent',
+                        selectors: {
+                          '.ms-DetailsRow:hover': {
+                            background: '#f3f8fe !important',
+                          },
+                        },
+                      },
+                    }}
+                  />
+                ) : (
+                  <Text styles={{ root: { color: '#888' } }}>
+                    No invoice requests for this PO
+                  </Text>
+                )}
+              </div>
+            </Stack>
           </Stack>
-        )}
-      </Panel>
+        )
+        }
+      </Panel >
 
       <Panel
         isOpen={invoiceRequestPanel.open}
@@ -797,6 +1270,6 @@ export default function BusinessView({
         )}
       </Panel>
 
-    </Stack>
+    </Stack >
   );
 }

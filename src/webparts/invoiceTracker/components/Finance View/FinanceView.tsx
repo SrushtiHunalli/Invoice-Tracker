@@ -35,8 +35,6 @@ import { saveAs } from 'file-saver';
 import { SPFI } from "@pnp/sp";
 import DocumentViewer from "../DocumentViewer";
 import styles from './FinanceView.module.scss';
-// import { columnSort, SortType } from './SortingUtils';
-// import { update } from "@microsoft/sp-lodash-subset";
 interface FinanceViewProps {
   sp: SPFI;
   context: any;
@@ -83,11 +81,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   const [isDragActive, setIsDragActive] = useState(false);
   const [, setCustomerOptions] = useState<IDropdownOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<IDropdownOption[]>([]);
+  // const [isPreviewing, setIsPreviewing] = useState(false);
   const [currentstatusOptions, setcurrentstatusOptions] = useState<IDropdownOption[]>([]);
-  // const [filterCurrentStatus, setFilterCurrentStatus] = useState<string | undefined>(undefined);
-  // const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  // const [filteringColumnKey, setFilteringColumnKey] = useState<string | null>(null);
-
+  const [financeAttachments, setFinanceAttachments] = useState<{ name: string; url: string }[]>([]);
   const [columnFilterMenu, setColumnFilterMenu] = useState<{ visible: boolean; target: HTMLElement | null; columnKey: string | null }>({
     visible: false,
     target: null,
@@ -189,6 +185,18 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   //   setFilteringColumnKey(columnFilterMenu.columnKey);
   //   setColumnFilterMenu({ visible: false, target: null, columnKey: null });
   // };
+
+  const getSelectedInvoiceIdFromUrl = (): number | null => {
+    const hash = window.location.hash; // e.g. "#updaterequests?selectedInvoice=72"
+    if (!hash.startsWith('#updaterequests')) return null;
+
+    const queryString = hash.split('?')[1]; // gets "selectedInvoice=72"
+    if (!queryString) return null;
+
+    const params = new URLSearchParams(queryString);
+    const selectedInvoice = params.get('selectedInvoice');
+    return selectedInvoice ? parseInt(selectedInvoice, 10) : null;
+  };
 
   async function fetchData() {
     setLoading(true);
@@ -310,6 +318,33 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     }
   }, [initialFilters]);
 
+  React.useEffect(() => {
+    const invoiceId = getSelectedInvoiceIdFromUrl();
+    if (invoiceId) {
+      sp.web.lists
+        .getByTitle('Invoice Requests')
+        .items.getById(invoiceId)
+        ()
+        .then((item) => {
+          setSelectedItem(item); // set invoice as selected
+          setIsPanelOpen(true);  // open the panel
+          // loadPmAttachments(item); // load attachments if applicable
+          // Set edit fields if you have like in openEditForm (optional)
+          setEditFields({
+            Status: item.Status?.trim(),
+            FinanceComments: item.FinanceComments ?? '',
+            InvoiceNumber: item.InvoiceNumber ?? '',
+            DueDate: item.DueDate ?? null,
+            // Set other fields if needed
+          });
+        })
+        .catch((error: any) => {
+          console.error('Failed to load invoice from URL ID:', error);
+          // Optionally handle error or clear URL param here
+        });
+    }
+  }, []);
+
   const showDialog = (message: string, type: "success" | "error") => {
     setDialogMessage(message);
     setDialogType(type);
@@ -346,38 +381,38 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     });
   };
 
-  const handleExportToExcel = () => {
+  // const handleExportToExcel = () => {
 
-    if (!filteredItems.length) {
-      setDialogMessage('No available Data to export');
-      setDialogType('error');
-      setDialogVisible(true);
-      return;
-    }
+  //   if (!filteredItems.length) {
+  //     setDialogMessage('No available Data to export');
+  //     setDialogType('error');
+  //     setDialogVisible(true);
+  //     return;
+  //   }
 
 
-    const exportData = filteredItems.map(item => ({
-      PurchaseOrder: item.PurchaseOrder,
-      ProjectName: item.ProjectName,
-      CurrentStatus: item.CurrentStatus || "-",
-      Status: item.Status,
-      Comments: item.Comments,
-      POItemTitle: item.POItem_x0020_Title,
-      POItemValue: item.POItem_x0020_Value,
-      InvoiceAmount: item.InvoiceAmount,
-      CustomerContact: item.Customer_x0020_Contact,
-      Created: item.Created ? new Date(item.Created).toLocaleDateString() : '',
-      CreatedBy: item.Author?.Title || "-",
-      Modified: item.Modified ? new Date(item.Modified).toLocaleDateString() : '',
-      ModifiedBy: item.Editor?.Title || "-"
-    }));
+  //   const exportData = filteredItems.map(item => ({
+  //     PurchaseOrder: item.PurchaseOrder,
+  //     ProjectName: item.ProjectName,
+  //     CurrentStatus: item.CurrentStatus || "-",
+  //     Status: item.Status,
+  //     Comments: item.Comments,
+  //     POItemTitle: item.POItem_x0020_Title,
+  //     POItemValue: item.POItem_x0020_Value,
+  //     InvoiceAmount: item.InvoiceAmount,
+  //     CustomerContact: item.Customer_x0020_Contact,
+  //     Created: item.Created ? new Date(item.Created).toLocaleDateString() : '',
+  //     CreatedBy: item.Author?.Title || "-",
+  //     Modified: item.Modified ? new Date(item.Modified).toLocaleDateString() : '',
+  //     ModifiedBy: item.Editor?.Title || "-"
+  //   }));
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'InvoiceRequests');
-    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `InvoiceRequests_${new Date().toISOString()}.xlsx`);
-  };
+  //   const worksheet = XLSX.utils.json_to_sheet(exportData);
+  //   const workbook = XLSX.utils.book_new();
+  //   XLSX.utils.book_append_sheet(workbook, worksheet, 'InvoiceRequests');
+  //   const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  //   saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `InvoiceRequests_${new Date().toISOString()}.xlsx`);
+  // };
 
 
   // Open the panel and select item
@@ -386,6 +421,41 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   //   setIsViewerOpen(false);  // initially no viewer open
   //   setIsPanelOpen(true);
   // };
+
+  const handleExportToExcel = () => {
+    if (!filteredItems.length) {
+      setDialogMessage('No available Data to export');
+      setDialogType('error');
+      setDialogVisible(true);
+      return;
+    }
+
+    const exportData = filteredItems.map(item => {
+      const obj: Record<string, any> = {};
+
+      columns.forEach(col => {
+        const field = col.fieldName!;
+        let value = item[field];
+
+        // Special handling for nested or computed fields
+        if (field === 'Author') value = item.Author?.Title || '-';
+        else if (field === 'Editor') value = item.Editor?.Title || '-';
+        else if (field === 'Created' && value) value = new Date(value).toLocaleDateString();
+        else if (field === 'Modified' && value) value = new Date(value).toLocaleDateString();
+
+        obj[col.name] = value ?? '-';
+      });
+
+      return obj;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'InvoiceRequests');
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), `InvoiceRequests_${new Date().toISOString()}.xlsx`);
+  };
+
 
   const filteredItems = React.useMemo(() => {
     const searchText = filters.search?.toLowerCase() || "";
@@ -489,32 +559,132 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       .find(part => part.type === 'currency')?.value || currencyCode;
   }
 
+  // async function sendFinanceClarificationEmail(item: any) {
+  //   if (!item) return;
+
+  //   const siteUrl = context.pageContext.web.absoluteUrl;
+  //   const listName = "Invoice Requests";
+  //   const toEmail = item.Author?.Email; // creator's email from SharePoint item
+
+  //   const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${item.Id}`;
+
+  //   const emailProps = {
+  //     To: toEmail, // Replace with actual finance email
+  //     Subject: `Clarification submitted for Invoice Request: PO ${item.PurchaseOrder}`,
+  //     Body: `
+  //     A clarification has been submitted on the following invoice request:<br/><br/>
+  //     <b>Purchase Order:</b> ${item.PurchaseOrder}<br/>
+  //     <b>Project Name:</b> ${item.ProjectName ?? "N/A"}<br/>
+  //     <b>PO Item Title:</b> ${item.POItem_x0020_Title ?? "N/A"}<br/>
+  //     <b>Finance Comments:</b> ${item.FinanceComments ?? "N/A"}<br/><br/>
+  //     Please review the clarification <a href="${itemUrl}">here</a>.
+  //   `,
+  //     AdditionalHeaders: {
+  //       "content-type": "text/html",
+  //     },
+  //   };
+
+  //   try {
+  //     // Use PnP to send email via SharePoint utility
+  //     await sp.utility.sendEmail(emailProps);
+  //   } catch (error) {
+  //     console.error("Failed to send finance clarification email", error);
+  //   }
+  // }
+
+  // async function sendPmStatusChangeEmail(item: any, oldStatus: string, newStatus: string) {
+  //   if (!item) return;
+
+  //   const siteUrl = context.pageContext.web.absoluteUrl;
+  //   const listName = "Invoice Requests";
+  //   const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${item.Id}`;
+
+  //   const emailProps = {
+  //     To: ["Srushti.hunalli@sacha.solutions"], // Replace with actual PM email
+  //     Subject: `Invoice Request Status Changed: PO ${item.PurchaseOrder}`,
+  //     Body: `
+  //     The status of the following invoice request has changed:<br/><br/>
+  //     <b>Purchase Order:</b> ${item.PurchaseOrder}<br/>
+  //     <b>Project Name:</b> ${item.ProjectName ?? "N/A"}<br/>
+  //     <b>PO Item Title:</b> ${item.POItem_x0020_Title ?? "N/A"}<br/>
+  //     <b>Previous Status:</b> ${oldStatus}<br/>
+  //     <b>New Status:</b> ${newStatus}<br/><br/>
+  //     You can view the invoice request <a href="${itemUrl}">here</a>.
+  //   `,
+  //     AdditionalHeaders: {
+  //       "content-type": "text/html",
+  //     },
+  //   };
+
+  //   try {
+  //     await sp.utility.sendEmail(emailProps);
+  //   } catch (error) {
+  //     console.error("Failed to send PM status change email", error);
+  //   }
+  // }
+
   async function sendFinanceClarificationEmail(item: any) {
     if (!item) return;
-
     const siteUrl = context.pageContext.web.absoluteUrl;
-    const listName = "Invoice Requests";
+    const authorId = item?.AuthorId;
+    const authorUser = await sp.web.getUserById(authorId)();
+    const toEmail = authorUser.Email;
 
-    const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${item.Id}`;
+    // const toEmail = item.Author?.Email;
+    const myRequestsUrl = `${siteUrl}/SitePages/MyRequests.aspx?selectedInvoice=${item.Id}`;
+    const financeClarificationEmailBody = `
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;background:#f9f9f9;border-radius:10px;padding:24px;">
+  <div style="font-size:18px;font-weight:600;color:#b71c1c;margin-bottom:16px;">
+    Clarification Required: Invoice Request
+  </div>
+  <div style="font-size:16px;color:#444;margin-bottom:18px;">
+    Please provide clarification by reviewing your invoice request.
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:15px;color:#333;margin-bottom:20px;">
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Purchase Order:</td>
+      <td>${item.PurchaseOrder}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Project Name:</td>
+      <td>${item.ProjectName ?? "N/A"}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">PO Item Title:</td>
+      <td>${item.POItemx0020Title ?? "N/A"}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Finance Comments:</td>
+      <td>${item.FinanceComments ?? "—"}</td>
+    </tr>
+  </table>
+  <div style="margin-bottom:24px;">
+    <a href="${myRequestsUrl}" style="font-size:15px;color:#0078d4;text-decoration:underline;">
+      Click here to review and clarify
+    </a>
+  </div>
+  <div style="border-top:1px solid #eee;margin-top:22px;padding-top:10px;font-size:13px;color:#999;">
+    Invoice Tracker | Sacha Group
+  </div>
+</div>
+`;
 
     const emailProps = {
-      To: ["srushti.hunalli@sacha.solutions"], // Replace with actual finance email
-      Subject: `Clarification submitted for Invoice Request: PO ${item.PurchaseOrder}`,
-      Body: `
-      A clarification has been submitted on the following invoice request:<br/><br/>
-      <b>Purchase Order:</b> ${item.PurchaseOrder}<br/>
-      <b>Project Name:</b> ${item.ProjectName ?? "N/A"}<br/>
-      <b>PO Item Title:</b> ${item.POItem_x0020_Title ?? "N/A"}<br/>
-      <b>Finance Comments:</b> ${item.FinanceComments ?? "N/A"}<br/><br/>
-      Please review the clarification <a href="${itemUrl}">here</a>.
-    `,
-      AdditionalHeaders: {
-        "content-type": "text/html",
-      },
+      To: [toEmail],
+      Subject: `Clarification Required on Invoice Request PO ${item.PurchaseOrder}`,
+      Body: financeClarificationEmailBody
+      //   `
+      //   The finance person has asked for clarification on your invoice request.<br><br>
+      //   <b>Purchase Order:</b> ${item.PurchaseOrder}<br>
+      //   <b>Project Name:</b> ${item.ProjectName ?? 'NA'}<br>
+      //   <b>PO Item Title:</b> ${item.POItemx0020Title ?? 'NA'}<br>
+      //   <b>Finance Comments:</b> ${item.FinanceComments ?? 'N/A'}<br><br>
+      //   Please provide clarification by reviewing the request in My Requests 
+      //   <a href="${myRequestsUrl}">here</a>.
+      // `,
+      // AdditionalHeaders: { "content-type": "text/html" },
     };
-
     try {
-      // Use PnP to send email via SharePoint utility
       await sp.utility.sendEmail(emailProps);
     } catch (error) {
       console.error("Failed to send finance clarification email", error);
@@ -523,26 +693,60 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
   async function sendPmStatusChangeEmail(item: any, oldStatus: string, newStatus: string) {
     if (!item) return;
-
     const siteUrl = context.pageContext.web.absoluteUrl;
-    const listName = "Invoice Requests";
-    const itemUrl = `${siteUrl}/Lists/${listName}/DispForm.aspx?ID=${item.Id}`;
+    const authorId = item?.AuthorId;
+    const authorUser = await sp.web.getUserById(authorId)();
+    const toEmail = authorUser.Email;
+    const myRequestsUrl = `${siteUrl}/SitePages/MyRequests.aspx?selectedInvoice=${item.Id}`;
+    const pmStatusChangeEmailBody = `
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;background:#f9f9f9;border-radius:10px;padding:24px;">
+  <div style="font-size:18px;font-weight:600;color:#1976d2;margin-bottom:16px;">
+    Invoice Request Status Changed
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:15px;color:#333;margin-bottom:20px;">
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Purchase Order:</td>
+      <td>${item.PurchaseOrder}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Project Name:</td>
+      <td>${item.ProjectName ?? "N/A"}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">PO Item Title:</td>
+      <td>${item.POItemx0020Title ?? "N/A"}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">New Status:</td>
+      <td>${newStatus}</td>
+    </tr>
+  </table>
+  <div style="margin-bottom:24px;">
+    <a href="${myRequestsUrl}" style="font-size:15px;color:#1976d2;text-decoration:underline;">
+      View Invoice Request
+    </a>
+  </div>
+  <div style="border-top:1px solid #eee;margin-top:22px;padding-top:10px;font-size:13px;color:#999;">
+    Invoice Tracker | Sacha Group
+  </div>
+</div>
+`;
 
     const emailProps = {
-      To: ["Srushti.hunalli@sacha.solutions"], // Replace with actual PM email
-      Subject: `Invoice Request Status Changed: PO ${item.PurchaseOrder}`,
-      Body: `
-      The status of the following invoice request has changed:<br/><br/>
-      <b>Purchase Order:</b> ${item.PurchaseOrder}<br/>
-      <b>Project Name:</b> ${item.ProjectName ?? "N/A"}<br/>
-      <b>PO Item Title:</b> ${item.POItem_x0020_Title ?? "N/A"}<br/>
-      <b>Previous Status:</b> ${oldStatus}<br/>
-      <b>New Status:</b> ${newStatus}<br/><br/>
-      You can view the invoice request <a href="${itemUrl}">here</a>.
-    `,
-      AdditionalHeaders: {
-        "content-type": "text/html",
-      },
+      To: [toEmail],
+      Subject: `Invoice Request Updated: PO ${item.PurchaseOrder}`,
+      Body: pmStatusChangeEmailBody,
+      //   `
+      //   The status of your invoice request has changed.<br><br>
+      //   <b>Purchase Order:</b> ${item.PurchaseOrder}<br>
+      //   <b>Project Name:</b> ${item.ProjectName ?? 'NA'}<br>
+      //   <b>PO Item Title:</b> ${item.POItemx0020Title ?? 'NA'}<br>
+      //   <b>Previous Status:</b> ${oldStatus}<br>
+      //   <b>New Status:</b> ${newStatus}<br><br>
+      //   You can view the request in My Requests 
+      //   <a href="${myRequestsUrl}">here</a>.
+      // `,
+      //   AdditionalHeaders: { "content-type": "text/html" },
     };
 
     try {
@@ -564,6 +768,18 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
       .map((att: any) => ({ name: att.FileName, url: att.ServerRelativeUrl }));
 
     setPmAttachments(pmAttachments);
+  }
+
+  async function loadFinanceAttachments(item: any) {
+    if (!item) {
+      setFinanceAttachments([]);
+      return;
+    }
+    const attachments = item.AttachmentFiles;
+    const financeAttachments = attachments
+      .filter((att: any) => att.FileName.match(/Finance/i))
+      .map((att: any) => ({ name: att.FileName, url: att.ServerRelativeUrl }));
+    setFinanceAttachments(financeAttachments);
   }
 
   // Open edit panel and load PM attachments
@@ -593,6 +809,24 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     setAttachments([]);
     setIsPanelOpen(true);
     loadPmAttachments(item);
+    loadFinanceAttachments(item);
+  }
+
+  async function removeFinanceAttachment(fileName: string) {
+    if (!selectedItem) return;
+    try {
+      await sp.web.lists
+        .getByTitle('Invoice Requests')
+        .items.getById(selectedItem.Id)
+        .attachmentFiles.getByName(fileName)
+        .delete();
+      // Reload attachments after delete
+      const updatedItem = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedItem.Id).expand('AttachmentFiles')();
+      setSelectedItem(updatedItem);
+      loadFinanceAttachments(updatedItem);
+    } catch (error) {
+      console.error('Failed to remove finance attachment', error);
+    }
   }
 
   async function handleClarification() {
@@ -1040,7 +1274,55 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                   ) : (
                     <span style={{ color: '#888' }}>No PM attachments</span>
                   )}
-
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontWeight: '600', marginBottom: 8 }}>Finance Attachments</div>
+                    {financeAttachments.length ? (
+                      <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                        {financeAttachments.map((att, i) => (
+                          <li
+                            key={i}
+                            style={{ cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center' }}
+                            onClick={() => {
+                              setViewerFileUrl(att.url);
+                              setViewerFileName(att.name);
+                              setIsViewerOpen(true);
+                            }}
+                          >
+                            <span style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}>{att.name}</span>
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ marginLeft: 12, color: '#605e5c', fontSize: 12 }}
+                            >
+                              Download
+                            </a>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Remove finance attachment logic here
+                                removeFinanceAttachment(att.name);
+                              }}
+                              style={{
+                                marginLeft: 8,
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#a4262c',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                              }}
+                              aria-label={`Remove attachment ${att.name}`}
+                              title={`Remove attachment ${att.name}`}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div style={{ color: '#888' }}>No Finance attachments</div>
+                    )}
+                  </div>
                   <div style={{ marginTop: 20 }}>Finance Attachments</div>
                   <div
                     onDrop={e => {
@@ -1098,6 +1380,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                           <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
                             onClick={() => {
                               setViewerFileUrl(URL.createObjectURL(file));
+                              // openPreviewPanel(URL.createObjectURL(file), file.name);
                               setViewerFileName(file.name);
                               setIsViewerOpen(true);
                             }}>
@@ -1115,6 +1398,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              // setIsPreviewing(true);
                               // Remove this file from attachments
                               setAttachments((prev) =>
                                 prev.filter((_, i) => i !== index)
@@ -1142,6 +1426,70 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                       ))}
                     </ul>
                   )}
+                  {/* <div style={{ marginTop: 20 }}>
+                    <div>Previous Finance Attachments</div>
+                    {financeAttachments.length > 0 ? (
+                      <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                        {financeAttachments.map((att, i) => (
+                          <li
+                            key={i}
+                            style={{ cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center' }}
+                          >
+                            <span
+                              style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}
+                              onClick={() => {
+                                setViewerFileUrl(att.url);
+                                setViewerFileName(att.name);
+                                setIsViewerOpen(true);
+                              }}
+                            >
+                              {att.name}
+                            </span>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                // Remove attachment from list
+                                loadFinanceAttachments((prev: any) => prev.filter((_: any, index: any) => index !== i));
+                                // Close viewer if it's viewing this file
+                                if (viewerFileName === att.name) {
+                                  setIsViewerOpen(false);
+                                  setViewerFileUrl(null);
+                                  setViewerFileName(null);
+                                }
+                              }}
+                              style={{
+                                marginLeft: 8,
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#a4262c',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                              }}
+                              aria-label={`Remove ${att.name}`}
+                              title={`Remove ${att.name}`}
+                            >
+                              ×
+                            </button>
+                            <button
+                              onClick={e => {
+                                // e.stopPropagation();
+                                openPreviewPanel(att.url, att.name)
+                                // setViewerFileUrl(att.url);
+                                // setViewerFileName(att.name);
+                                // setIsViewerOpen(true);
+                              }}
+                              style={{ marginLeft: 8 }}
+                              title={`Preview ${att.name}`}
+                            >
+                              Preview
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div style={{ color: '#888' }}>No previous attachments</div>
+                    )}
+                  </div>; */}
                 </Stack>
                 <div style={{ height: 62 }}></div>
                 {/* Buttons */}

@@ -1010,41 +1010,64 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     }
   }, [selectedReq]);
 
+  // useEffect(() => {
+  //   async function loadSelectedInvoice() {
+  //     if (initialFilters?.selectedInvoice) {
+  //       const invoiceId = Number(initialFilters.selectedInvoice);
+  //       if (invoiceId) {
+  //         try {
+  //           const invoice = await fetchInvoiceRequestById(sp, invoiceId);
+  //           if (invoice) {
+  //             setSelectedReq(invoice);
+  //             setShowHierPanel(true);
+  //           }
+  //         } catch (error) {
+  //           console.error("Failed to load invoice", error);
+  //         }
+  //       }
+  //     } else if (window.location.hash) {
+  //       const hash = window.location.hash;
+  //       const queryString = hash.split('?')[1];
+  //       const searchParams = new URLSearchParams(queryString);
+  //       const invoiceId = Number(searchParams.get('selectedInvoice'));
+  //       if (invoiceId) {
+  //         try {
+  //           const invoice = await fetchInvoiceRequestById(sp, invoiceId);
+  //           if (invoice) {
+  //             setSelectedReq(invoice);
+  //             setShowHierPanel(true);
+  //           }
+  //         } catch (error) {
+  //           console.error("Failed to load invoice", error);
+  //         }
+  //       }
+  //     }
+  //   }
+  //   loadSelectedInvoice();
+  // }, [initialFilters]);
+
   useEffect(() => {
-    async function loadSelectedInvoice() {
+    async function loadSelectedInvoiceAndHierarchy() {
       if (initialFilters?.selectedInvoice) {
         const invoiceId = Number(initialFilters.selectedInvoice);
         if (invoiceId) {
-          try {
-            const invoice = await fetchInvoiceRequestById(sp, invoiceId);
-            if (invoice) {
-              setSelectedReq(invoice);
-              setShowHierPanel(true);
+          const invoice = await fetchInvoiceRequestById(sp, invoiceId);
+          if (invoice) {
+            setSelectedReq(invoice);
+            setShowHierPanel(true);
+            // --- New logic for hierarchy ---
+            const mainPO = findMainPO(invoice, invoicePOs);
+            if (mainPO) {
+              const hierarchy = getHierarchyForPO(mainPO, invoicePOs, invoiceRequests);
+              setPOHierarchy(hierarchy);
             }
-          } catch (error) {
-            console.error("Failed to load invoice", error);
-          }
-        }
-      } else if (window.location.hash) {
-        const hash = window.location.hash;
-        const queryString = hash.split('?')[1];
-        const searchParams = new URLSearchParams(queryString);
-        const invoiceId = Number(searchParams.get('selectedInvoice'));
-        if (invoiceId) {
-          try {
-            const invoice = await fetchInvoiceRequestById(sp, invoiceId);
-            if (invoice) {
-              setSelectedReq(invoice);
-              setShowHierPanel(true);
-            }
-          } catch (error) {
-            console.error("Failed to load invoice", error);
           }
         }
       }
     }
-    loadSelectedInvoice();
-  }, [initialFilters]);
+    loadSelectedInvoiceAndHierarchy();
+  }, [initialFilters, invoicePOs, invoiceRequests]);
+
 
   const filteredItems = React.useMemo(() => {
     const searchLower = searchText?.toLowerCase().trim() || "";
@@ -1825,14 +1848,14 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     text={`Show all Invoice Requests`}
                     onClick={() => setSelectedPOItem(null)}
                     disabled={!selectedPOItem}
-                    // style={{
-                    //   marginLeft: 12,
-                    //   // color: "white",
-                    //   // background: primaryColor,
-                    //   fontWeight: 600,
-                    //   borderRadius: 4,
-                    //   padding: "4px 16px"
-                    // }}
+                  // style={{
+                  //   marginLeft: 12,
+                  //   // color: "white",
+                  //   // background: primaryColor,
+                  //   fontWeight: 600,
+                  //   borderRadius: 4,
+                  //   padding: "4px 16px"
+                  // }}
                   />
                 </div>
 

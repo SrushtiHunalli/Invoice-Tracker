@@ -29,9 +29,8 @@ import {
   Dropdown,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
-// import { columnSort, SortType } from "./SortingUtils"
 import styles from "./CreateView.module.scss"
-// import { SPFx } from "@pnp/sp/presets/all";
+
 interface CreateViewProps {
   sp: SPFI;
   context: any;
@@ -150,6 +149,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   //   .reduce((sum, inv) => sum + (inv.Amount || 0), 0);
 
   // const [selectedMainPO, setSelectedMainPO] = useState<PurchaseOrderItem | null>(null);
+  const isFilterApplied = !!filters.search || !!invoiceStatusFilter;
   const [invoiceFormState, setInvoiceFormState] = useState<InvoiceFormState>({
     POID: "",
     PurchaseOrder: "",
@@ -182,7 +182,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     {
       key: "POAmount", name: "PO Amount", fieldName: "POAmount", minWidth: 120, maxWidth: 160, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item) => {
         // return `${item.POAmount} ${item.Currency ?? ''}`.trim();
-        const symbol = getCurrencySymbol(item.Currency);
+        const currencyCode = item.Currency && item.Currency.trim() !== "" ? item.Currency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         return <span>{symbol} {item.POAmount}</span>;
       }
     },
@@ -198,32 +199,50 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       }
     },
     {
+      key: "PaymentAsked",
+      name: "Invoiced Amount",
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onColumnClick: onColumnHeaderClick,
+      onRender: (item: PurchaseOrderItem) => {
+        const amount = totalPaymentAskedByPO(item.POID);
+        const currencyCode = item.Currency && item.Currency.trim() !== "" ? item.Currency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
+        return <span>{symbol}{amount}</span>;
+      }
+    },    
+    {
       key: 'InvoicedAmount',
-      name: 'Invoiced Amount',
+      name: 'Paid Amount',
       fieldName: 'InvoicedAmount',
       minWidth: 120,
       maxWidth: 160,
       isResizable: true,
       onRender: (item: PurchaseOrderItem) => {
-        const symbol = getCurrencySymbol(item.Currency);
+        const currencyCode = item.Currency && item.Currency.trim() !== "" ? item.Currency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         const amount = invoiceRequestsForPercent
           .filter(ir => ir.PurchaseOrderPO === item.POID && ir.Status === "Payment Received")
           .reduce((sum, ir) => sum + (ir.Amount || 0), 0);
         return <span>{symbol} {amount}</span>;
       }
     }
+
   ];
   const invoiceColumnsView: IColumn[] = [
     { key: "POItemTitle", name: "PO Item Title", fieldName: "POItemTitle", minWidth: 130, maxWidth: 180, isResizable: true },
     {
       key: "POItemValue", name: `PO Item Value`, fieldName: "POItemValue", minWidth: 120, maxWidth: 140, isResizable: true, onRender: (item: InvoiceRequest) => {
-        const symbol = getCurrencySymbol(invoiceCurrency);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         return <span>{symbol} {item.POItemValue}</span>;
       }
     },
     {
       key: "Amount", name: `Invoiced Amount`, fieldName: "Amount", minWidth: 120, maxWidth: 160, isResizable: true, onRender: (item: InvoiceRequest) => {
-        const symbol = getCurrencySymbol(invoiceCurrency);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         return <span>{symbol} {item.Amount}</span>;
       }
     },
@@ -319,7 +338,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       maxWidth: 140,
       // isResizable: true,
       onRender: (item: ChildPOItem) => {
-        const symbol = getCurrencySymbol(invoiceCurrency);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         return <span>{symbol} {item.POAmount}</span>;
       }
     },
@@ -328,10 +348,39 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       key: "POAmount", name: `Remaining Item Value`, fieldName: "POAmount", minWidth: 120, maxWidth: 150, isResizable: true, onRender: (item: ChildPOItem) => {
         // const remaining = getRemainingPOAmount(item, invoiceRequests);
         // return <span>{remaining}</span>;
-        const symbol = getCurrencySymbol(invoiceCurrency);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
         const remaining = getRemainingPOAmount(item, invoiceRequests);
         return <span>{symbol} {remaining}</span>;
       },
+    },
+    {
+      key: "InvoicedAmountItem",
+      name: "Invoiced Amount",
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onRender: (item: ChildPOItem) => {
+        const amount = invoiceRequests
+          .filter(ir => ir.POItemTitle?.trim() === item.POID.trim() && ir.Status !== "Cancelled")
+          .reduce((sum, ir) => sum + (ir.Amount ?? 0), 0);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
+        return <span>{symbol}{amount}</span>;
+      }
+    },
+    {
+      key: "PaymentAskedAmountItem",
+      name: "Payment Asked",
+      minWidth: 120,
+      maxWidth: 160,
+      isResizable: true,
+      onRender: (item: ChildPOItem) => {
+        const amount = totalPaymentAskedByPOItem(selectedItem?.POID, item.POID);
+        const currencyCode = invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD";
+        const symbol = getCurrencySymbol(currencyCode);
+        return <span>{symbol}{amount}</span>;
+      }
     },
     {
       key: 'InvoicedPercentItem',
@@ -415,6 +464,13 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setIsSortedDescending(direction === 'desc');
   };
 
+  const totalInvoicedAmountMainPO = selectedItem
+    ? invoiceRequestsForPercent
+      .filter(ir => ir.PurchaseOrderPO?.trim() === selectedItem.POID?.trim() && ir.Status?.toLowerCase() === "payment received")
+      .reduce((sum, ir) => sum + (ir.Amount ?? 0), 0)
+    : 0;
+
+
   const handleInvoicePanelDismiss = () => {
     setIsInvoicePanelOpen(false);
     setInvoicePanelPO(null);
@@ -432,7 +488,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setFetchingInvoices(true);
     setChildPOItems([]);
     setInvoiceRequests([]);
-    setActivePOIDFilter(null);
+    // setActivePOIDFilter(null);
+    setActivePOIDFilter(selectedItem?.POID || null);
     setIsPanelOpen(false);
     setIsInvoicePanelOpen(false);
     setIsReadOnlyInvoicePanel(true);
@@ -447,6 +504,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
         const invoices = await fetchInvoiceRequests(sp, [selectedItem.POID]);
         setInvoiceRequests(invoices);
+
         await handleOpenInvoicePanelSinglePO(selectedItem, "");
         return;
       }
@@ -696,7 +754,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setFetchingInvoices(true);
     setChildPOItems([]);
     setInvoiceRequests([]);
-    setActivePOIDFilter(null);
+    setActivePOIDFilter(selectedItem?.POID || null);
+    // setActivePOIDFilter(null);
     setIsPanelOpen(false);
     setIsInvoicePanelOpen(false);
     setIsReadOnlyInvoicePanel(false);
@@ -841,6 +900,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setIsPanelOpen(false);
     setChildPOItems([]);
     setInvoiceRequests([]);
+    setSelectedItem(null);
+    selection.setAllSelected(false);
     // setActivePOIDFilter(null);
     childPOSelection.setAllSelected(false);
     setIsReadOnlyInvoicePanel(false);
@@ -974,6 +1035,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     setUploadedFiles(prev => [...prev, ...files]);
+    setInvoiceFormState(prev => ({ ...prev, Attachment: files[0] }));
   };
 
   const handleDropMulti = (e: React.DragEvent<HTMLDivElement>) => {
@@ -981,12 +1043,25 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     setIsDragActive(false);
     const files = Array.from(e.dataTransfer.files);
     setUploadedFiles(prev => [...prev, ...files]);
+    setInvoiceFormState(prev => ({ ...prev, Attachment: files[0] }));
   };
 
   // Remove specific file
+  // const removeAttachment = (idx: number) => {
+  //   setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+  // };
+
   const removeAttachment = (idx: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+    setUploadedFiles(prev => {
+      const updated = prev.filter((_, i) => i !== idx);
+      setInvoiceFormState(form => ({
+        ...form,
+        Attachment: updated[0] ?? null // sets to first file, or null if none left
+      }));
+      return updated;
+    });
   };
+
 
   function decodeHtmlEntities(str: string): string {
     const txt = document.createElement("textarea");
@@ -1174,16 +1249,59 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     }
   }
 
-  function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    })
-      .formatToParts(1)
-      .find(part => part.type === 'currency')?.value || currencyCode;
+  // function getCurrencySymbol(currencyCode: string, locale = 'en-US'): string {
+  //   return new Intl.NumberFormat(locale, {
+  //     style: 'currency',
+  //     currency: currencyCode,
+  //     minimumFractionDigits: 0,
+  //     maximumFractionDigits: 0
+  //   })
+  //     .formatToParts(1)
+  //     .find(part => part.type === 'currency')?.value || currencyCode;
+  // }
+
+  function getCurrencySymbol(currencyCode: string, locale = "en-US") {
+    if (!currencyCode || currencyCode.trim() === "") {
+      // Return a default symbol or empty string if no currency code provided
+      return "USD";
+    }
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })
+        .formatToParts(1)
+        .find(part => part.type === "currency")?.value ?? currencyCode;
+    } catch (error) {
+      // Fallback if currency code invalid
+      console.warn(`Invalid currency code: ${currencyCode}`, error);
+      return currencyCode;
+    }
   }
+
+  const totalPaymentAskedByPO = (poid: string) => {
+    return invoiceRequestsForPercent
+      .filter(ir =>
+        ir.PurchaseOrderPO != null &&
+        ir.PurchaseOrderPO === poid &&
+        ir.Status?.toLowerCase() !== "cancelled"
+      )
+      .reduce((sum, ir) => sum + (ir.Amount ?? 0), 0);
+  };
+
+  const totalPaymentAskedByPOItem = (poid: string, poItemTitle: string) => {
+    return invoiceRequests
+      .filter(ir =>
+        ir.PurchaseOrderPO != null &&
+        ir.PurchaseOrderPO === poid &&
+        ir.POItemTitle != null &&
+        ir.POItemTitle.trim() === poItemTitle.trim() &&
+        ir.Status?.toLowerCase() !== "cancelled"
+      )
+      .reduce((sum, ir) => sum + (ir.Amount ?? 0), 0);
+  };
 
   async function getProjectNameByPOID(context: any, poId: number, poItem: any): Promise<string> {
     try {
@@ -1278,7 +1396,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         });
 
       } else {
-        await sp.web.lists.getByTitle("Invoice Requests").items.add({
+        const added = await sp.web.lists.getByTitle("Invoice Requests").items.add({
           PurchaseOrder: invoiceFormState.POID,
           ProjectName: invoiceFormState.ProjectName,
           POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
@@ -1293,8 +1411,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           Currency: invoiceCurrency,
           CurrentStatus: `Request Submitted by ${userRole}`
         });
+        addedItemId = added.Id;
       }
-
       if (invoicePanelPO === null && invoiceFormState.POItemValue) {
         await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).update({
           POAmount: Number(invoiceFormState.POItemValue)
@@ -1308,6 +1426,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           .attachmentFiles.add(fileNameWithSuffix, fileContent);
       }
 
+      const financeConfigItems = await sp.web.lists.getByTitle("InvoiceConfiguration").items.filter("Title eq 'FinanceEmail'")();
+      const financeEmails = financeConfigItems.length > 0 ? financeConfigItems[0].Value : "";
       const creatorEmail = context.pageContext.user.email;
 
       const siteUrl = context.pageContext.web.absoluteUrl;
@@ -1316,21 +1436,58 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
       const itemLink = `${appPageUrl}#myrequests?selectedInvoice=${addedItemId}`;
 
+      // TypeScript: Compose HTML for "created user" email
+      const createdUserEmailBody = `
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;background:#f9f9f9;border-radius:10px;padding:24px;">
+  <div style="font-size:18px;font-weight:600;color:#0078d4;margin-bottom:16px;">
+    Invoice Request Created
+  </div>
+  <div style="font-size:16px;color:#444;margin-bottom:18px;">
+    Your new invoice request has been created and is now being tracked in the system.
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:15px;color:#333;margin-bottom:20px;">
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">PO ID:</td>
+      <td>${invoiceFormState.POID}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Project Name:</td>
+      <td>${invoiceFormState.ProjectName}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">PO Item Title:</td>
+      <td>${invoiceFormState.POItemTitle}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Comments:</td>
+      <td>${invoiceFormState.Comments || "—"}</td>
+    </tr>
+  </table>
+  <div style="margin-bottom:24px;">
+    <a href="${itemLink}" style="font-size:15px;color:#0078d4;text-decoration:underline;">
+      Click here to view the invoice request
+    </a>
+  </div>
+  <div style="border-top:1px solid #eee;margin-top:22px;padding-top:10px;font-size:13px;color:#999;">
+    Invoice Tracker | Sacha Group
+  </div>
+</div>
+`;
 
       const sendNotificationEmail = async () => {
         try {
           await sp.utility.sendEmail({
             To: [creatorEmail],
             Subject: `New Invoice Request: ${invoiceFormState.InvoiceAmount} for ${invoiceFormState.PurchaseOrder}`,
-            Body: `
-        A new invoice request has been created.<br/><br/>
-        <b>PO ID:</b> ${invoiceFormState.POID}<br/>
-        <b>Project Name:</b> ${invoiceFormState.ProjectName}<br/>
-        <b>PO Item Title:</b> ${invoiceFormState.POItemTitle}<br/>
-        <b>Invoiced Amount:</b> ${invoiceFormState.InvoiceAmount}<br/>
-        <b>Comments:</b> ${invoiceFormState.Comments}<br/><br/>
-        <a href="${itemLink}">Click here to view the invoice request.</a>
-      `,
+            Body: createdUserEmailBody,
+            //   A new invoice request has been created.<br/><br/>
+            //   <b>PO ID:</b> ${invoiceFormState.POID}<br/>
+            //   <b>Project Name:</b> ${invoiceFormState.ProjectName}<br/>
+            //   <b>PO Item Title:</b> ${invoiceFormState.POItemTitle}<br/>
+            //   <b>Invoiced Amount:</b> ${invoiceFormState.InvoiceAmount}<br/>
+            //   <b>Comments:</b> ${invoiceFormState.Comments}<br/><br/>
+            //   <a href="${itemLink}">Click here to view the invoice request.</a>
+            // `,
           });
           setDialogType("success");
           setDialogMessage("Invoice request submitted successfully!");
@@ -1345,7 +1502,8 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           setInvoiceRequestsForPercent(updatedInvoices);
           setIsInvoicePanelOpen(false);
           setInvoicePanelPO(null);
-
+          setUploadedFiles([]);
+          setInvoiceFormState(prev => ({ ...prev, Attachment: null }));
 
         } catch (error) {
           if (addedItemId !== null) {
@@ -1358,7 +1516,50 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       };
 
       await sendNotificationEmail();
+      // TypeScript: Compose HTML for "finance" email
+      if (financeEmails) {
+        const financeEmailArray = financeEmails.split(",").map((e: any) => e.trim());
+        const financelink = `${appPageUrl}#updaterequests?selectedInvoice=${addedItemId}`;
 
+        const financeEmailBody = `
+<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;background:#f9f9f9;border-radius:10px;padding:24px;">
+  <div style="font-size:18px;font-weight:600;color:#0078d4;margin-bottom:16px;">
+    Invoice Request Submission Notice
+  </div>
+  <div style="font-size:16px;color:#444;margin-bottom:18px;">
+    An invoice request has been submitted for your review.
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:15px;color:#333;margin-bottom:20px;">
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">PO ID:</td>
+      <td>${invoiceFormState.POID}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;padding:6px 0;">Project Name:</td>
+      <td>${invoiceFormState.ProjectName}</td>
+    </tr>
+  </table>
+  <div style="margin-bottom:24px;">
+    <a href="${financelink}" style="font-size:15px;color:#0078d4;text-decoration:underline;">
+      Click here to update the invoice request
+    </a>
+  </div>
+  <div style="border-top:1px solid #eee;margin-top:22px;padding-top:10px;font-size:13px;color:#999;">
+    Invoice Tracker | Sacha Group
+  </div>
+</div>
+`;
+        await sp.utility.sendEmail({
+          To: financeEmailArray,
+          Subject: "Invoice Request Submitted",
+          Body: financeEmailBody,
+          // `An invoice request has been submitted.<br><br>
+          //    <b>PO ID:</b> ${invoiceFormState.POID}<br>
+          //    <b>Project Name:</b> ${invoiceFormState.ProjectName}<br>
+          //    <b>Amount:</b> ${invoiceFormState.InvoiceAmount}<br>
+          //    <a href="${financelink}">Click here to update the invoice request</a>`
+        });
+      }
 
       // const lookupPOIDs = [invoiceFormState.POID, ...childPOItems.map(c => c.POID)];
       const allPOIDs = mainPOs.map(po => po.POID);
@@ -1402,7 +1603,11 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             placeholder="Filter by Invoice Status"
             options={invoiceStatusOptions}
             selectedKey={invoiceStatusFilter}
-            onChange={(e, option) => setInvoiceStatusFilter(option?.key ? option.key.toString() : null)}
+            onChange={(e, option) => {
+              setInvoiceStatusFilter(option?.key ? option.key.toString() : null);
+              selection.setAllSelected(false);      // Remove selection from main list
+              setSelectedItem(null);                // Also clear selected main PO item in state
+            }}
           // styles={{ dropdown: { width: 250, marginBottom: 15 } }}
           />
           <PrimaryButton
@@ -1410,7 +1615,10 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             onClick={() => {
               setFilters({ search: "" });
               setInvoiceStatusFilter(null);
+              selection.setAllSelected(false);      // Remove selection from main list
+              setSelectedItem(null);                // Also clear selected main PO item in state
             }}
+            disabled={!isFilterApplied}
             styles={{ root: { backgroundColor: primaryColor } }}
           // styles={{ root: { marginRight: 12 } }}
           />
@@ -1486,9 +1694,21 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 disabled
                 styles={{ root: { maxWidth: 220, marginTop: 0, marginBottom: 0, fontSize: 15, fontWeight: 600 } }}
               />
+              <TextField
+                label="Invoiced Amount"
+                value={`${getCurrencySymbol(invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD")}${totalPaymentAskedByPO(selectedItem?.POID).toFixed(2)}`}
+                readOnly
+                disabled
+              />
+              <TextField
+                label="Paid Amount"
+                value={`${getCurrencySymbol(invoiceCurrency && invoiceCurrency.trim() !== "" ? invoiceCurrency : "USD")}${totalInvoicedAmountMainPO.toFixed(2)}`}
+                readOnly
+                disabled
+              />
             </div>
 
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 7, color: "#626262" }}>PO Items:</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 7, color: "#626262", overflowX: "auto" }}>PO Items:</div>
             <div>
               {fetchingChildPOs ? (
                 <Spinner label="Loading child POs..." />
@@ -1693,7 +1913,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                           <Stack horizontal key={file.name + idx} verticalAlign="center" styles={{ root: { marginBottom: 6 } }}>
                             <span style={{ flex: 1, fontWeight: 520, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</span>
                             <IconButton
-                              iconProps={{ iconName: "Remove" }}
+                              iconProps={{ iconName: "Cancel" }}
                               title="Remove"
                               ariaLabel={`Remove ${file.name}`}
                               onClick={() => removeAttachment(idx)}

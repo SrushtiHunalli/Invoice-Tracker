@@ -379,7 +379,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       links.push({ key: "Createview", name: "Create Invoice Request", iconProps: { iconName: "People" }, url: "" });
     }
     if (isFinance || isAdmin) {
-      links.push({ key: "financeview", name: "Update Invoice Request", iconProps: { iconName: "Money" }, url: "" });
+      links.push({ key: "updaterequests", name: "Update Invoice Request", iconProps: { iconName: "Money" }, url: "" });
     }
     if (isPM || isDM || isDH || isAdmin) {
       links.push({ key: "businessview", name: "Business View", iconProps: { iconName: "Financial" }, url: "" });
@@ -511,7 +511,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         if (isPMorDMorDH || isAdminUser)
           return <CreateView sp={this.sp} projectsp={this.projectSp} context={this.props.context} />;
         break;
-      case "financeview":
+      case "updaterequests":
         if (isFinance || isAdminUser)
           return <FinanceView sp={this.sp} projectsp={this.projectSp} context={this.props.context} initialFilters={this.state.filter} onNavigate={this.handleNavigate} />;
         break;
