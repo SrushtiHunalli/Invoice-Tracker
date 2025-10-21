@@ -296,7 +296,7 @@ export default function BusinessView({
         let allowedTeamsForUser: string[] = [];
 
         const addUnique = (arr: string[]) => {
-          allowedTeamsForUser = Array.from(new Set([...allowedTeamsForUser, ...arr]));
+          allowedTeamsForUser = Array.from(new Set([...allTCC, ...arr]));
         };
 
         if (userGroups.includes("business manager")) {

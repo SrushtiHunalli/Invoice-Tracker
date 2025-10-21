@@ -12,6 +12,7 @@ export interface IInvoiceTrackerProps {
   onNavigate?: (pageKey: string, filter?: any) => void;
   projectSiteUrl?: string;
   getCurrentPageUrl?: () => string;
+  pageConfig?: Record<string, boolean>;
 }
 
 

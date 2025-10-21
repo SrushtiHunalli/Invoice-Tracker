@@ -1178,7 +1178,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                 }}
               >
                 {/* Two-column form layout */}
-                <Stack horizontal tokens={{ childrenGap: 25 }} styles={{ root: { width: '100%' } }}>
+                <Stack horizontal tokens={{ childrenGap: 36 }} styles={{ root: { width: '100%' } }}>
                   {/* Left column */}
                   <Stack tokens={{ childrenGap: 12 }} styles={{ root: { minWidth: 300, flex: 1 } }}>
                     <TextField label="Purchase Order" value={selectedItem?.PurchaseOrder || ''} disabled />
@@ -1365,7 +1365,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                     onChange={handleFileChange}
                   />
                   <i className='ms-Icon ms-Icon--Attach' style={{ fontSize: 46, color: '#aaa' }} aria-hidden="true"></i>
-                  <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload attachments</div>
+                  <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload</div>
                   {attachments.length ? (
                     <div style={{ marginTop: 15, fontSize: 14, color: '#107c10' }}>
                       Selected: {attachments.map(f => f.name).join(', ')}

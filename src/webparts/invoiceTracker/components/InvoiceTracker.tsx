@@ -24,6 +24,7 @@ export interface IInvoiceTrackerProps {
   selectedSites: string[];
   projectSiteUrl?: string;
   getCurrentPageUrl?: () => string;
+  pageConfig?: Record<string, boolean>;
 }
 interface IInvoiceTrackerState {
   loading: boolean;
@@ -40,6 +41,7 @@ interface IInvoiceTrackerState {
   clarificationCount?: number;
   userGroups: string[];
   isNavCollapsed: boolean;
+  pageConfig: Record<string, boolean>;
 }
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
@@ -90,6 +92,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       paymentPending: 0,
       userGroups: [],
       isNavCollapsed: false,
+      pageConfig: props.pageConfig || {},
     };
     this.sp = spfi().using(SPFx(this.props.context));
     this.setCanvasParentStyles();
@@ -161,6 +164,29 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     const isDM = roles.includes("DM") || roles.includes("Delivery Manager");
     const isDH = roles.includes("DH") || roles.includes("Department Head");
 
+    function decodeHtmlEntities(str: string): string {
+      const txt = document.createElement('textarea');
+      txt.innerHTML = str;
+      return txt.value;
+    }
+
+    try {
+      const items = await this.sp.web.lists.getByTitle("InvoiceConfiguration").items
+        .filter(`Title eq 'PageConfig'`)
+        .top(1)();
+
+      if (items.length > 0 && items[0].Value) {
+        const decodedValue = decodeHtmlEntities(items[0].Value);
+        const config = JSON.parse(decodedValue);
+        this.setState({ pageConfig: config });
+        this.applyPageSettings(config);
+      } else {
+        this.applyPageSettings({});
+      }
+    } catch (e) {
+      console.error("Error loading pageConfig:", e);
+      this.applyPageSettings({});
+    }
 
     this.setState({ userRoles: roles, isAdminUser: isAdmin });
     this.updateProgress();
@@ -194,12 +220,49 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     // window.removeEventListener("resize", this.handleResize);
   }
 
+  componentDidUpdate(prevProps: IInvoiceTrackerProps, prevState: IInvoiceTrackerState) {
+    if (prevState.pageConfig !== this.state.pageConfig) {
+      this.applyPageSettings(this.state.pageConfig);
+    }
+  }
+
+
+  applyPageSettings = (config: Record<string, boolean>) => {
+    const pageSettings = [
+      { stateVariable: "hideCommandBar", selectors: ["#spCommandBar"] },
+      { stateVariable: "hideSideAppBar", selectors: ["#sp-appBar"] },
+      { stateVariable: "hidePageTitle", selectors: ["[id*='PageTitle']"] },
+      { stateVariable: "hideSiteHeader", selectors: ["#spSiteHeader", "#spLeftNav"] },
+      { stateVariable: "hideCommentsWrapper", selectors: ["#CommentsWrapper"] },
+      { stateVariable: "hideO365BrandNavbar", selectors: ["#SuiteNavWrapper"] },
+      { stateVariable: "hideSharepointHubNavbar", selectors: [".ms-HubNav"] },
+    ];
+
+    pageSettings.forEach(ps => {
+      const hide = config[ps.stateVariable];
+      ps.selectors.forEach(selector => {
+        const el = document.querySelector(selector);
+        if (el && el instanceof HTMLElement) {
+          el.style.setProperty("display", hide ? "none" : "", "important");
+        }
+      });
+    });
+  };
+
+
+
   // private handleResize = () => {
   //   this.setState({
   //     windowHeight: window.innerHeight,
   //     windowWidth: window.innerWidth,
   //   });
   // };
+
+  handleConfigChange = (newConfig: Record<string, boolean>) => {
+    this.setState({ pageConfig: newConfig });
+    // Optionally, persist config to SharePoint here.
+  };
+
 
   private async getUserRoles(): Promise<string[]> {
     try {
@@ -212,8 +275,17 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
   private async fetchUserGroups() {
     try {
       const groups = await this.sp.web.currentUser.groups();
-      const groupTitles = groups.map(g => g.Title);
-      this.setState({ userGroups: groupTitles });
+      // Filter out groups whose titles end with Members, Owners, or Visitors
+      const filteredGroupTitles = groups
+        .map(g => g.Title)
+        .filter(title =>
+          !(
+            title.endsWith('Members') ||
+            title.endsWith('Owners') ||
+            title.endsWith('Visitors')
+          )
+        );
+      this.setState({ userGroups: filteredGroupTitles });
     } catch {
       this.setState({ userGroups: [] });
     }
@@ -235,16 +307,16 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       if (error.status === 404) {
         const added = await this.sp.web.lists.add("InvoiceConfiguration", "Configuration for Invoice Tracker", 100);
         const list = this.sp.web.lists.getById(added.Id)
-         await list.fields.addMultilineText("Value");
+        await list.fields.addMultilineText("Value");
       }
     }
-    const value = {"hideCommandBar":true,"hideSideAppBar":true,"hidePageTitle":true,"hideSiteHeader":true,"hideCommentsWrapper":true,"hideO365BrandNavbar":true,"hideSharepointHubNavbar":true}
+    const value = { "hideCommandBar": true, "hideSideAppBar": true, "hidePageTitle": true, "hideSiteHeader": true, "hideCommentsWrapper": true, "hideO365BrandNavbar": true, "hideSharepointHubNavbar": true }
 
     await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
       Title: "PageConfig",
       Value: value,
     })
-        await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
+    await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
       Title: "FinanceEmail",
       Value: "",
     })
@@ -314,16 +386,41 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
   private async ensureConfigList() {
     try {
       // Try to get the list by title
-      await this.sp.web.lists.getByTitle("InvoiceConfiguration").select("Id")();
+      await this.sp.web.lists.getByTitle("InvoiceConfiguration")();
     } catch (error: any) {
       if (error.status === 404) {
-        // List not found, so create it
-        const addResult = await this.sp.web.lists.add("InvoiceConfiguration", "Stores Configuration", 100); // 100 = Custom List
-        const list = this.sp.web.lists.getById(addResult.Id);
+        //   // List not found, so create it
+        //   const addResult = await this.sp.web.lists.add("InvoiceConfiguration", "Stores Configuration", 100); // 100 = Custom List
+        //   const list = this.sp.web.lists.getById(addResult.Id);
 
-        await list.fields.addMultilineText("Value");
-      } else {
-        throw error; // rethrow if not a 'not found' error
+        //   await list.fields.addMultilineText("Value");
+        // } else {
+        //   throw error; // rethrow if not a 'not found' error
+        // }
+        const defaultConfig = {
+          hideCommandBar: false,
+          hideSideAppBar: false,
+          hidePageTitle: false,
+          hideSiteHeader: false,
+          hideCommentsWrapper: false,
+          hideO365BrandNavbar: false,
+          hideSharepointHubNavbar: false
+        };
+
+        const list = this.sp.web.lists.getByTitle("InvoiceConfiguration");
+        const pageConfigItems = await list.items.filter(`Title eq 'PageConfig'`).top(1)();
+        const financeEmailItems = await list.items.filter(`Title eq 'FinanceEmail'`).top(1)();
+
+        if (pageConfigItems.length === 0) {
+          await list.items.add({ Title: "PageConfig", Value: JSON.stringify(defaultConfig) });
+        } else {
+          await list.items.getById(pageConfigItems[0].Id).update({ Value: JSON.stringify(defaultConfig) });
+        }
+        if (financeEmailItems.length === 0) {
+          await list.items.add({ Title: "FinanceEmail", Value: "" });
+        } else {
+          await list.items.getById(financeEmailItems[0].Id).update({ Value: "" });
+        }
       }
     }
   }
@@ -366,7 +463,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           name: "", // Remove name to display only icon
           onRenderNavLink: (link: any) => (
             <div title={link.originalName || link.name} style={{ display: 'flex', justifyContent: 'center' }}>
-              <i className={`ms-Icon ms-Icon--${link.iconProps?.iconName}`} aria-hidden="true" style={{ color: primaryColor }}/>
+              <i className={`ms-Icon ms-Icon--${link.iconProps?.iconName}`} aria-hidden="true" style={{ color: primaryColor }} />
             </div>
           )
         }))
@@ -492,7 +589,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         break;
       case "settings":
         if (isAdminUser)
-          return <Settings sp={this.sp} context={this.props.context} />;
+          return <Settings sp={this.sp} context={this.props.context} pageConfig={this.props.pageConfig} onConfigChange={this.handleConfigChange} />;
         break;
       case "managemembers":
         if (isAdminUser)
@@ -614,13 +711,16 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
                 this.state.isNavCollapsed
               )}
               // styles={{ root: { overflowY: "auto", flexGrow: 1, color: primaryColor } }}
-               styles={navStyles}
+              styles={navStyles}
             />
           </div>
           {!this.state.isNavCollapsed && (
             <div className={styles.sidebarFooter}>
               <Persona text={this.props.userDisplayName} size={PersonaSize.size24} />
-              <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+              {/* <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+                {`(${this.state.userGroups.join(", ")})`}
+              </div> */}
+              <div style={{ marginTop: 8, fontSize: 12, color: "#666", display: "flex", justifyContent: "center", width: "100%", textAlign: "center" }}>
                 {`(${this.state.userGroups.join(", ")})`}
               </div>
             </div>

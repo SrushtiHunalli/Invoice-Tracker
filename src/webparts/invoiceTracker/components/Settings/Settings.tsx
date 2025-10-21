@@ -93,31 +93,58 @@ interface SettingsProps {
   sp: SPFI;
   onSettingsUpdate?: (settings: Record<string, boolean>) => void;
   context?: any;
+  pageConfig?: Record<string, boolean>;
+  onConfigChange?: (settings: Record<string, boolean>) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
-  const [loading, setLoading] = useState(true);
+const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, context, onConfigChange }) => {
+  // const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Record<string, boolean>>(
+  const [financePeople, setFinancePeople] = useState<IPersonaProps[]>([]);
+  const [settings, setSettings] = React.useState<Record<string, boolean>>(
     pageSettings.reduce((acc, item) => {
       acc[item.stateVariable] = false;
       return acc;
     }, {} as Record<string, boolean>)
   );
-  const [financePeople, setFinancePeople] = useState<IPersonaProps[]>([]);
+  // const [settings, setSettings] = useState<Record<string, boolean> | null>(null);
+  const [loading, setLoading] = useState(true);
+  // React.useEffect(() => {
+  //   if (pageConfig) {
+  //     setSettings(prev => ({ ...prev, ...pageConfig }));
+  //   }
+  // }, [pageConfig]);
 
   // Load page settings from InvoiceConfiguration list
   useEffect(() => {
+    function decodeHtmlEntities(str: string): string {
+      const txt = document.createElement('textarea');
+      txt.innerHTML = str;
+      return txt.value;
+    }
     async function loadPageSettings() {
       try {
         const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
         if (items.length > 0 && items[0].Value) {
-          const settingValues = JSON.parse(items[0].Value);
-          setSettings(prev => ({ ...prev, ...settingValues }));
+          const decoded = decodeHtmlEntities(items[0].Value);
+          const settingValues = JSON.parse(decoded);
+          setSettings(settingValues);
+        } else {
+          setSettings(
+            pageSettings.reduce((acc, item) => {
+              acc[item.stateVariable] = false;
+              return acc;
+            }, {} as Record<string, boolean>)
+          );
         }
       } catch {
-        // fallback defaults
+        setSettings(
+          pageSettings.reduce((acc, item) => {
+            acc[item.stateVariable] = false;
+            return acc;
+          }, {} as Record<string, boolean>)
+        );
       }
       setLoading(false);
     }
@@ -206,6 +233,9 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
   const onToggleChange = async (key: string, checked?: boolean) => {
     if (checked === undefined) return;
     const updated = { ...settings, [key]: checked };
+    if (onConfigChange) {
+      onConfigChange(updated);
+    }
     setSettings(updated);
     if (onSettingsUpdate) onSettingsUpdate(updated);
     try {
@@ -224,7 +254,7 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
     }
   };
 
-  if (loading) return <Spinner label="Loading settings..." />;
+  if (loading || !settings) return <Spinner label="Loading settings..." />;
 
   return (
     <div style={{ maxWidth: 480, padding: 12 }}>
