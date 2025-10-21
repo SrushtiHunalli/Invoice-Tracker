@@ -139,19 +139,19 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     });
 
 
-    const canvas = document.querySelector('.CanvasSection');
-    if (canvas && canvas.parentElement) {
-      canvas.parentElement.style.width = "100%";
-      canvas.parentElement.style.minWidth = "100%";
-      canvas.parentElement.style.maxWidth = "100%";
-      canvas.parentElement.style.position = "fixed";
-      canvas.parentElement.style.top = "0"
-      canvas.parentElement.style.left = "0";
-      canvas.parentElement.style.height = "100%";
-      canvas.parentElement.style.zIndex = "1000";
-      canvas.parentElement.style.margin = "0";
-      canvas.parentElement.style.background = "#fff";
-    }
+    // const canvas = document.querySelector('.CanvasSection');
+    // if (canvas && canvas.parentElement) {
+    //   canvas.parentElement.style.width = "100%";
+    //   canvas.parentElement.style.minWidth = "100%";
+    //   canvas.parentElement.style.maxWidth = "100%";
+    //   canvas.parentElement.style.position = "fixed";
+    //   canvas.parentElement.style.top = "0"
+    //   canvas.parentElement.style.left = "0";
+    //   canvas.parentElement.style.height = "100%";
+    //   canvas.parentElement.style.zIndex = "1000";
+    //   canvas.parentElement.style.margin = "0";
+    //   canvas.parentElement.style.background = "#fff";
+    // }
 
     this.setState({ loading: true, progress: 10 });
     const roles = await this.getUserRoles();
@@ -233,9 +233,21 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       await this.sp.web.lists.getByTitle("InvoiceConfiguration").select("Id")();
     } catch (error: any) {
       if (error.status === 404) {
-        await this.sp.web.lists.add("InvoiceConfiguration", "Configuration for Invoice Tracker", 100);
+        const added = await this.sp.web.lists.add("InvoiceConfiguration", "Configuration for Invoice Tracker", 100);
+        const list = this.sp.web.lists.getById(added.Id)
+         await list.fields.addMultilineText("Value");
       }
     }
+    const value = {"hideCommandBar":true,"hideSideAppBar":true,"hidePageTitle":true,"hideSiteHeader":true,"hideCommentsWrapper":true,"hideO365BrandNavbar":true,"hideSharepointHubNavbar":true}
+
+    await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
+      Title: "PageConfig",
+      Value: value,
+    })
+        await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
+      Title: "FinanceEmail",
+      Value: "",
+    })
   }
 
   private async ensureLists() {
@@ -315,47 +327,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       }
     }
   }
-
-  // private async ensureAttachmentsLibrary() {
-  //   try {
-  //     // Try to get the list - if it exists this will succeed
-  //     await this.sp.web.lists.getByTitle("InvoiceAttachments").select("Id")();
-  //   } catch (error: any) {
-  //     if (error.status === 404) {
-  //       // Not found, create document library
-  //       await this.sp.web.lists.add("InvoiceAttachments", "Document library for invoice attachments", 101); // 101 = Document Library template
-  //     } else {
-  //       throw error; // rethrow other errors
-  //     }
-  //   }
-  // }
-
-  // private async loadCounts() {
-  //   try {
-  //     const pendingRequestsCount = await this.sp.web.lists.getByTitle("Invoice Requests")
-  //       .items.filter(`FinanceStatus eq 'Pending'`).top(5000)
-  //       .select("ID")();
-  //     const paymentPendingCount = await this.sp.web.lists.getByTitle("Invoice Requests")
-  //       .items.filter(`Status eq 'Pending Payment'`).top(5000)
-  //       .select("ID")();
-  //     const clarificationCount = await this.sp.web.lists.getByTitle("Invoice Requests")
-  //       .items.filter(`FinanceStatus eq 'Clarification'`).top(5000)
-  //       .select("ID")();
-
-  //     this.setState({
-  //       pendingRequests: pendingRequestsCount.length,
-  //       paymentPending: paymentPendingCount.length,
-  //       clarificationCount: clarificationCount.length
-  //     });
-  //   } catch (error) {
-  //     console.error("Error loading invoice request counts:", error);
-  //     this.setState({
-  //       pendingRequests: 0,
-  //       paymentPending: 0,
-  //       clarificationCount: 0
-  //     });
-  //   }
-  // }
   private async loadConfiguration() {
   }
 

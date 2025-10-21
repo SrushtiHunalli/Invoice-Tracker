@@ -27,6 +27,7 @@ import {
   ContextualMenuItemType,
   Separator,
   Dropdown,
+  Label,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
 import styles from "./CreateView.module.scss"
@@ -35,9 +36,6 @@ interface CreateViewProps {
   sp: SPFI;
   context: any;
   projectsp: SPFI;
-}
-interface InvoiceRequestCardProps {
-  invoice: InvoiceRequest;
 }
 type PurchaseOrderItem = {
   Id: number;
@@ -211,7 +209,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         const symbol = getCurrencySymbol(currencyCode);
         return <span>{symbol}{amount}</span>;
       }
-    },    
+    },
     {
       key: 'InvoicedAmount',
       name: 'Paid Amount',
@@ -251,13 +249,13 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     { key: "CurrentStatus", name: "Current Status", fieldName: "CurrentStatus", minWidth: 140, maxWidth: 170, isResizable: true },
     {
       key: "PMCommentsHistory",
-      name: "PM Comments",
+      name: "Requestor Comments",
       fieldName: "PMCommentsHistory",
       minWidth: 200,
       maxWidth: 300,
       isResizable: true,
       onRender: (item: InvoiceRequest) => {
-        if (!item.PMCommentsHistory) return "No PM Comments";
+        if (!item.PMCommentsHistory) return "No Requestor Comments";
         try {
           const comments = formatCommentHistory(item.PMCommentsHistory);
           return comments
@@ -268,7 +266,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     },
     {
       key: "FinanceCommentsHistory",
-      name: "Finance Comments History",
+      name: "Finance Comments",
       fieldName: "FinanceCommentsHistory",
       minWidth: 200,
       maxWidth: 300,
@@ -423,15 +421,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   ];
   const [invoicePanelLoading, setInvoicePanelLoading] = useState(false);
 
-  // const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-  //   e.preventDefault();
-  //   setIsDragActive(false);
-  //   const file = e.dataTransfer.files[0];
-  //   if (file && (file.type === "application/pdf" || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || file.type === "application/vnd.ms-excel")) {
-  //     setUploadedFiles(file);
-  //     setInvoiceFormState(prev => ({ ...prev, Attachment: file }));
-  //   }
-  // };
   const menuItems = [
     { key: 'asc', text: 'Sort Asc to Desc', iconProps: { iconName: 'SortUp' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'asc') },
     { key: 'desc', text: 'Sort Desc to Asc', iconProps: { iconName: 'SortDown' }, onClick: () => sortColumn(columnFilterMenu.columnKey!, 'desc') },
@@ -685,37 +674,63 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       if (invoiceStatusFilter === "CompletelyInvoiced" && percent !== 100) return false;
     }
 
+    if (filters.search) {
+      const searchText = filters.search.toLowerCase();
+
+      // Check against all columns with a fieldName property
+      const matchesSearch = columns.some(col => {
+        const fieldName = col.fieldName;
+        if (!fieldName) return false;
+
+        const fieldValue = (po as any)[fieldName];
+
+        if (fieldValue === undefined || fieldValue === null) return false;
+
+        // Convert to string and lower case to support number fields as well
+        return fieldValue.toString().toLowerCase().includes(searchText);
+      });
+
+      if (!matchesSearch) {
+        return false;
+      }
+    }
     return true;
   });
 
-  function formatCommentHistory(jsonStr?: string): string {
-    if (!jsonStr) return "";
+  function decodeHtmlEntities(str: string): string {
+    const txt = document.createElement("textarea");
+    txt.innerHTML = str;
+    return txt.value;
+  }
+
+  function formatCommentHistory(historyJson?: string) {
+    let arr = [];
     try {
-      const decodedStr = decodeHtmlEntities(jsonStr);
-      const entries = JSON.parse(decodedStr);
-      if (!Array.isArray(entries)) return "";
+      if (!historyJson) return "";
 
-      return entries.map((entry: any) => {
-        const dateObj = entry.Date ? new Date(entry.Date) : null;
-        const date = dateObj ? dateObj.toLocaleDateString() : "";
-        const time = dateObj ? dateObj.toLocaleTimeString() : "";
-        const user = entry.User ?? "";
-        const role = entry.Role ?? "";
-        const title = entry.Title ?? "";
+      // Decode any HTML entities to get valid JSON string
+      const decodedJson = decodeHtmlEntities(historyJson);
 
-        // Split comment lines
-        const dataLines = (entry.Data ?? "").split("\n");
-
-        // Join lines with <br /> or just join with newline if rendering supports it
-        const formattedComment = dataLines.join("<br />");
-
-        // Format output string combining all parts
-        return `${date} ${time} ${user} (${role}) ${title}: ${formattedComment}`;
-      }).join("<br /><br />"); // Separate multiple comments by extra line breaks
-    } catch (err) {
-      console.error("Failed to format comment history", err, jsonStr);
-      return "";
+      arr = JSON.parse(decodedJson);
+    } catch {
+      arr = [];
     }
+    if (!Array.isArray(arr)) arr = [];
+
+    return arr
+      .map((entry: any) => {
+        const dateObj = entry.Date ? new Date(entry.Date) : null;
+        const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB') : '';
+        const timeStr = dateObj ? dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : '';
+        const user = entry.User || 'Unknown User';
+        const role = entry.Role ? ` (${entry.Role})` : '';
+        const title = entry.Title || '';
+        const comment = entry.Data || '';
+
+        // Format as: [date time] user (role) - title:\ncomment
+        return `[${dateStr} ${timeStr}]${user}${role} \n${title}: ${comment}`;
+      })
+      .join('\n\n'); // two line breaks between entries
   }
   const handleInvoiceAmountChange = (value: string) => {
     handleInvoiceFormChange("InvoiceAmount", value);
@@ -799,45 +814,36 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       setFetchingInvoices(false);
     }
   };
-  const fieldStyle = {
-    root: { marginBottom: 8, display: 'flex' },
-    label: { fontWeight: 600, width: 180, color: primaryColor, fontSize: 15 },
-    value: { fontWeight: 400, color: '#303030', fontSize: 15 }
-  };
-
-  const historyStyle = {
-    root: { background: '#f6f8fa', padding: '7px 14px', borderRadius: 6, marginBottom: 8, fontSize: 14 }
-  };
 
   // Helper to render text or fallback
   const renderValue = (value: any) => value ? value : <span style={{ color: '#999' }}>—</span>;
 
-  const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
-    <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
-      <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600 } }}>Invoice Request Details</Text>
-      <Separator />
+  // const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
+  //   <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
+  //     <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600 } }}>Invoice Request Details</Text>
+  //     <Separator />
 
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Title</div><div style={fieldStyle.value}>{renderValue(invoice.POItemTitle)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItemValue)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.Amount)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Current Status</div><div style={fieldStyle.value}>{renderValue(invoice.CurrentStatus)}</div></div>
-      <Separator />
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Title</div><div style={fieldStyle.value}>{renderValue(invoice.POItemTitle)}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItemValue)}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.Amount)}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Current Status</div><div style={fieldStyle.value}>{renderValue(invoice.CurrentStatus)}</div></div>
+  //     <Separator />
 
-      <div style={fieldStyle.label}>PM Comments History</div>
-      <div style={historyStyle.root}>{renderValue(formatCommentHistory(invoice.PMCommentsHistory))}</div>
+  //     <div style={fieldStyle.label}>Requestor Comments</div>
+  //     <div style={historyStyle.root}>{renderValue(formatCommentHistory(invoice.PMCommentsHistory))}</div>
 
-      <div style={fieldStyle.label}>Finance Comments History</div>
-      <div style={historyStyle.root}>{renderValue(formatCommentHistory(invoice.FinanceCommentsHistory))}</div>
+  //     <div style={fieldStyle.label}>Finance Comments</div>
+  //     <div style={historyStyle.root}>{renderValue(formatCommentHistory(invoice.FinanceCommentsHistory))}</div>
 
-      <Separator />
+  //     <Separator />
 
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created</div><div style={fieldStyle.value}>{renderValue(new Date(invoice.Created).toLocaleString())}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created By</div><div style={fieldStyle.value}>{renderValue(invoice.CreatedBy)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified</div><div style={fieldStyle.value}>{renderValue(new Date(invoice.Modified).toLocaleString())}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified By</div><div style={fieldStyle.value}>{renderValue(invoice.ModifiedBy)}</div></div>
-    </Stack>
-  );
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Created</div><div style={fieldStyle.value}>{renderValue(new Date(invoice.Created).toLocaleString())}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Created By</div><div style={fieldStyle.value}>{renderValue(invoice.CreatedBy)}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified</div><div style={fieldStyle.value}>{renderValue(new Date(invoice.Modified).toLocaleString())}</div></div>
+  //     <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified By</div><div style={fieldStyle.value}>{renderValue(invoice.ModifiedBy)}</div></div>
+  //   </Stack>
+  // );
   // useEffect(() => {
   //   const fetchGroups = async () => {
   //     try {
@@ -1062,13 +1068,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     });
   };
 
-
-  function decodeHtmlEntities(str: string): string {
-    const txt = document.createElement("textarea");
-    txt.innerHTML = str;
-    return txt.value;
-  }
-
   function getChildItemsForPO(record: any, index: number): ChildPOItem[] {
     const childPOField = index === 0 ? "ParentPOID" : `ParentPOID${index + 1}`;
     const poAmountField = index === 0 ? "POAmount" : `POAmount${index + 1}`;
@@ -1184,8 +1183,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           "CurrentStatus"
         )
         .expand("Author", "Editor")();
-
-      // console.log(items)
       return items.map(item => ({
         Id: item.Id,
         PurchaseOrderPO: item.PurchaseOrder,
@@ -1305,7 +1302,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   async function getProjectNameByPOID(context: any, poId: number, poItem: any): Promise<string> {
     try {
-      console.log("Fetching project name for POID:", poId, poItem);
       const getAllProjectsq = async (): Promise<any[]> => {
         const allItems: any[] = [];
 
@@ -1378,7 +1374,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
         const pmCommentsHistoryArray = [newCommentEntry];
 
-        await sp.web.lists.getByTitle("Invoice Requests").items.add({
+        const added1 = await sp.web.lists.getByTitle("Invoice Requests").items.add({
           PurchaseOrder: invoiceFormState.POID,
           ProjectName: invoiceFormState.ProjectName,
           POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
@@ -1394,9 +1390,10 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           CurrentStatus: `Request Submitted by ${userRole}`,
           PMCommentsHistory: JSON.stringify(pmCommentsHistoryArray)
         });
+        addedItemId = added1.Id;
 
       } else {
-        const added = await sp.web.lists.getByTitle("Invoice Requests").items.add({
+        const added2 = await sp.web.lists.getByTitle("Invoice Requests").items.add({
           PurchaseOrder: invoiceFormState.POID,
           ProjectName: invoiceFormState.ProjectName,
           POAmount: invoiceFormState.POAmount ? Number(invoiceFormState.POAmount) : null,
@@ -1411,21 +1408,34 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           Currency: invoiceCurrency,
           CurrentStatus: `Request Submitted by ${userRole}`
         });
-        addedItemId = added.Id;
+        addedItemId = added2.Id;
       }
+
       if (invoicePanelPO === null && invoiceFormState.POItemValue) {
         await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).update({
           POAmount: Number(invoiceFormState.POItemValue)
         });
       }
+      // if (invoiceFormState.Attachment) {
+      //   const file = invoiceFormState.Attachment;
+      //   const fileExt = file.name.slice(file.name.lastIndexOf('.')); // e.g., ".pdf"
+      //   const fileNameWithoutExt = file.name.slice(0, file.name.lastIndexOf('.'));
+      //   const fileNameWithSuffix = `${fileNameWithoutExt}${userRole}${fileExt}`; // e.g., "invoicePM.pdf"
+      //   const fileContent = await file.arrayBuffer();
+      // await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId)
+      //   .attachmentFiles.add(fileNameWithSuffix, fileContent);
       if (invoiceFormState.Attachment) {
         const file = invoiceFormState.Attachment;
-        const fileNameWithSuffix = `${file.name.replace(/\.[^/.]+$/, "")}_PM${file.name.match(/\.[^/.]+$/)?.[0] || ""}`;
+        const fileExt = file.name.slice(file.name.lastIndexOf('.'));
+        const fileNameWithoutExt = file.name.slice(0, file.name.lastIndexOf('.'));
+        const fileNameWithSuffix = `${fileNameWithoutExt}${userRole}${fileExt}`;
         const fileContent = await file.arrayBuffer();
-        await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId)
+
+        // Exact pattern from the screenshot:
+        await sp.web.lists.getByTitle("Invoice Requests")
+          .items.getById(addedItemId)
           .attachmentFiles.add(fileNameWithSuffix, fileContent);
       }
-
       const financeConfigItems = await sp.web.lists.getByTitle("InvoiceConfiguration").items.filter("Title eq 'FinanceEmail'")();
       const financeEmails = financeConfigItems.length > 0 ? financeConfigItems[0].Value : "";
       const creatorEmail = context.pageContext.user.email;
@@ -1480,14 +1490,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             To: [creatorEmail],
             Subject: `New Invoice Request: ${invoiceFormState.InvoiceAmount} for ${invoiceFormState.PurchaseOrder}`,
             Body: createdUserEmailBody,
-            //   A new invoice request has been created.<br/><br/>
-            //   <b>PO ID:</b> ${invoiceFormState.POID}<br/>
-            //   <b>Project Name:</b> ${invoiceFormState.ProjectName}<br/>
-            //   <b>PO Item Title:</b> ${invoiceFormState.POItemTitle}<br/>
-            //   <b>Invoiced Amount:</b> ${invoiceFormState.InvoiceAmount}<br/>
-            //   <b>Comments:</b> ${invoiceFormState.Comments}<br/><br/>
-            //   <a href="${itemLink}">Click here to view the invoice request.</a>
-            // `,
           });
           setDialogType("success");
           setDialogMessage("Invoice request submitted successfully!");
@@ -1553,11 +1555,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           To: financeEmailArray,
           Subject: "Invoice Request Submitted",
           Body: financeEmailBody,
-          // `An invoice request has been submitted.<br><br>
-          //    <b>PO ID:</b> ${invoiceFormState.POID}<br>
-          //    <b>Project Name:</b> ${invoiceFormState.ProjectName}<br>
-          //    <b>Amount:</b> ${invoiceFormState.InvoiceAmount}<br>
-          //    <a href="${financelink}">Click here to update the invoice request</a>`
         });
       }
 
@@ -1593,36 +1590,45 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       <div style={{ flexGrow: 1, overflowY: 'auto' }}>
         <h2 style={{ marginBottom: 20 }}>Create Invoice Request</h2>
         <Stack horizontal verticalAlign="end" tokens={{ childrenGap: 16 }} styles={{ root: { flexWrap: "nowrap", overflowX: "auto", paddingBottom: 8 } }}>
-          <SearchBox
-            placeholder="Search"
-            value={filters.search}
-            onChange={(ev, newVal) => setFilters((f) => ({ ...f, search: newVal || "" }))}
-            styles={{ root: { width: 250, minWidth: 250 } }}
-          />
-          <Dropdown
-            placeholder="Filter by Invoice Status"
-            options={invoiceStatusOptions}
-            selectedKey={invoiceStatusFilter}
-            onChange={(e, option) => {
-              setInvoiceStatusFilter(option?.key ? option.key.toString() : null);
-              selection.setAllSelected(false);      // Remove selection from main list
-              setSelectedItem(null);                // Also clear selected main PO item in state
-            }}
-          // styles={{ dropdown: { width: 250, marginBottom: 15 } }}
-          />
-          <PrimaryButton
-            text="Clear Filters"
-            onClick={() => {
-              setFilters({ search: "" });
-              setInvoiceStatusFilter(null);
-              selection.setAllSelected(false);      // Remove selection from main list
-              setSelectedItem(null);                // Also clear selected main PO item in state
-            }}
-            disabled={!isFilterApplied}
-            styles={{ root: { backgroundColor: primaryColor } }}
-          // styles={{ root: { marginRight: 12 } }}
-          />
-          <PrimaryButton text="Create Invoice Request" disabled={!selectedItem} onClick={handleOpenPanel} />
+          <div>
+            <Label>Search</Label>
+            <SearchBox
+              placeholder="Search"
+              value={filters.search}
+              onChange={(ev, newVal) => setFilters((f) => ({ ...f, search: newVal || "" }))}
+              styles={{ root: { width: 250, minWidth: 250 } }}
+            />
+          </div>
+          <div>
+            <Dropdown
+              placeholder="Filter by Invoice Status"
+              options={invoiceStatusOptions}
+              selectedKey={invoiceStatusFilter}
+              onChange={(e, option) => {
+                setInvoiceStatusFilter(option?.key ? option.key.toString() : null);
+                selection.setAllSelected(false);      // Remove selection from main list
+                setSelectedItem(null);                // Also clear selected main PO item in state
+              }}
+            // styles={{ dropdown: { width: 250, marginBottom: 15 } }}
+            />
+          </div>
+          <div>
+            <PrimaryButton
+              text="Clear Filters"
+              onClick={() => {
+                setFilters({ search: "" });
+                setInvoiceStatusFilter(null);
+                selection.setAllSelected(false);      // Remove selection from main list
+                setSelectedItem(null);                // Also clear selected main PO item in state
+              }}
+              disabled={!isFilterApplied}
+              styles={{ root: { backgroundColor: primaryColor } }}
+            // styles={{ root: { marginRight: 12 } }}
+            />
+          </div>
+          <div>
+            <PrimaryButton text="Create Invoice Request" disabled={!selectedItem} onClick={handleOpenPanel} />
+          </div>
         </Stack>
         {loading && <Spinner label="Loading data..." />}
         {error && <div style={{ color: "red" }}>{error}</div>}
@@ -1662,21 +1668,22 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           onDismiss={handlePanelDismiss}
           // headerText="Purchase Order"
           closeButtonAriaLabel="Close"
-          type={PanelType.custom}
+          type={PanelType.extraLarge}
+          // customWidth="1000px"
           isLightDismiss={false}
           isBlocking={false}
           isFooterAtBottom={true}
-          styles={{
-            main: {
-              maxWidth: 1000,
-              width: '100%',
-              margin: 'auto',
-              borderRadius: 8,
-            },
-            scrollableContent: {
-              padding: 16,
-            },
-          }}
+        // styles={{
+        //   main: {
+        //     maxWidth: 2000,
+        //     width: '100%',
+        //     margin: 'auto',
+        //     borderRadius: 8,
+        //   },
+        //   scrollableContent: {
+        //     padding: 16,
+        //   },
+        // }}
         >
           <Stack tokens={{ childrenGap: 18 }} styles={{ root: { marginTop: 6, marginBottom: 6 } }}>
             <div style={{ display: "flex", flexDirection: "row", gap: 24, alignItems: "flex-start", marginTop: 0, marginBottom: 0 }}>
@@ -1708,7 +1715,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               />
             </div>
 
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 7, color: "#626262", overflowX: "auto" }}>PO Items:</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 7, color: "#626262" }}>PO Items:</div>
             <div>
               {fetchingChildPOs ? (
                 <Spinner label="Loading child POs..." />
@@ -1728,6 +1735,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                       overflowX: "hidden",
                       width: '100%',
                       minWidth: 0,
+                      overflow: 'auto',
                     },
                   }}
                 />
@@ -1954,12 +1962,108 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         <Panel
           isOpen={isInvoiceRequestViewPanelOpen}
           onDismiss={() => { setIsInvoiceRequestViewPanelOpen(false); setSelectedInvoiceRequest(null); }}
-          headerText=""
+          headerText="Invoice Request Details"
           type={PanelType.medium}
+          styles={{
+            content: { padding: 20 },
+            headerText: { fontWeight: 600, fontSize: 22, color: primaryColor }
+          }}
         >
-          {selectedInvoiceRequest && <InvoiceRequestCard invoice={selectedInvoiceRequest} />}
+          {selectedInvoiceRequest && (
+            <Stack tokens={{ childrenGap: 24 }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 24,
+                marginBottom: 24
+              }}>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Title: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItemTitle)}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItemValue)}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Amount)}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Status)}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Current Status: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.CurrentStatus)}</Text>
+                </div>
+              </div>
+              {/* Comments, only if present */}
+              {formatCommentHistory(selectedInvoiceRequest.PMCommentsHistory)?.trim() && (
+                <TextField
+                  label="Requestor Comments"
+                  value={formatCommentHistory(selectedInvoiceRequest.PMCommentsHistory)}
+                  multiline
+                  disabled
+                  styles={{
+                    root: {},
+                    subComponentStyles: {
+                      label: {
+                        root: {
+                          color: primaryColor,
+                          fontWeight: 600
+                        }
+                      }
+                    }
+                  }}
+                />
+              )}
+              {formatCommentHistory(selectedInvoiceRequest.FinanceCommentsHistory)?.trim() && (
+                <TextField
+                  label="Finance Comments"
+                  value={formatCommentHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
+                  multiline
+                  disabled
+                  styles={{
+                    root: {},
+                    subComponentStyles: {
+                      label: {
+                        root: {
+                          color: primaryColor,
+                          fontWeight: 600
+                        }
+                      }
+                    }
+                  }}
+                />
+              )}
+              {/* Metadata */}
+              <Separator styles={{ root: { marginTop: 16, marginBottom: 16 } }} />
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 18
+              }}>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Created: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString()}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Created By: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.CreatedBy)}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString()}</Text>
+                </div>
+                <div>
+                  <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified By: </Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.ModifiedBy)}</Text>
+                </div>
+              </div>
+            </Stack>
+          )}
         </Panel>
-
         <Dialog
           hidden={!dialogVisible}
           onDismiss={() => setDialogVisible(false)}
@@ -1972,8 +2076,10 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             isBlocking: false,
           }}
         >
-          <DialogFooter>
-            <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" styles={{ root: { backgroundColor: primaryColor } }} />
+          <DialogFooter >
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+              <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" styles={{ root: { backgroundColor: primaryColor } }} />
+            </div>
           </DialogFooter>
         </Dialog>
       </div>

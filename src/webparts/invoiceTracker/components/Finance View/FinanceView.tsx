@@ -102,7 +102,6 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     financeStatus: initialFilters?.FinanceStatus || "",
     currentstatus: initialFilters?.CurrentStatus || "",
   });
-
   // Edit form fields and attachments
   const [editFields, setEditFields] = useState<any>({});
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -130,6 +129,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isDocPanelOpen, setIsDocPanelOpen] = useState(false);
 
   const sortColumn = (columnKey: string, direction: 'asc' | 'desc') => {
     const sortedItems = [...items].sort((a, b) => {
@@ -242,7 +242,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         { key: "Status", name: "Invoice Status", fieldName: "Status", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
         // { key: "Currency", name: "Currency", fieldName: "Currency", minWidth: 150, maxWidth: 200, isResizable: true, onColumnClick: onColumnHeaderClick, },
         { key: "DueDate", name: "DueDate", fieldName: "DueDate", minWidth: 150, maxWidth: 200, isResizable: true, onRender: item => item.DueDate ? new Date(item.DueDate).toLocaleDateString() : "-", onColumnClick: onColumnHeaderClick, },
-        { key: "Comments", name: "PM Comments", fieldName: "Comments", minWidth: 160, maxWidth: 300, isResizable: true, onColumnClick: onColumnHeaderClick, },
+        { key: "Comments", name: "Requestor Comments", fieldName: "Comments", minWidth: 160, maxWidth: 300, isResizable: true, onColumnClick: onColumnHeaderClick, },
         { key: "POItem_x0020_Title", name: "PO Item Title", fieldName: "POItem_x0020_Title", minWidth: 120, maxWidth: 170, isResizable: true, onColumnClick: onColumnHeaderClick, },
         {
           key: "POItem_x0020_Value", name: "PO Item Value", fieldName: "POItem_x0020_Value", minWidth: 100, maxWidth: 140, isResizable: true, onColumnClick: onColumnHeaderClick, onRender: (item: any) => {
@@ -328,7 +328,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         .then((item) => {
           setSelectedItem(item); // set invoice as selected
           setIsPanelOpen(true);  // open the panel
-          // loadPmAttachments(item); // load attachments if applicable
+          loadPmAttachments(item); // load attachments if applicable
           // Set edit fields if you have like in openEditForm (optional)
           setEditFields({
             Status: item.Status?.trim(),
@@ -353,10 +353,10 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
   const handleDialogClose = async () => {
     setDialogVisible(false);
-    setIsPanelOpen(false); // Close the panel if needed
-    setSelectedItem(null); // Deselect current item to allow re-selection
+    setIsPanelOpen(false);
+    setSelectedItem(null);
     if (dialogType === 'success') {
-      await fetchData(); // Refresh data if necessary
+      await fetchData(); // Refresh data
     }
   };
 
@@ -368,6 +368,10 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     setPmAttachments([]);
     setSelectedItem(null);
     // setIsViewerOpen(false);
+  };
+
+  const handleDocPanelDismiss = () => {
+    setIsDocPanelOpen(false);
   };
 
   const clearFilters = () => {
@@ -481,10 +485,17 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
 
   useEffect(() => {
-    setCustomerOptions(getUniqueOptions(filteredItems, "Customer"));
-    setStatusOptions(getUniqueOptions(filteredItems, "Status"));
-    setcurrentstatusOptions(getUniqueOptions(filteredItems, "CurrentStatus"));
-  }, [filteredItems]);
+    setCustomerOptions(getUniqueOptions(items, "Customer"));
+    setStatusOptions(getUniqueOptions(items, "Status"));
+    setcurrentstatusOptions(getUniqueOptions(items, "CurrentStatus"));
+  }, [items]);
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = '[class*="contentContainer-"] { inset: unset !important; }';
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
 
   const onRenderDetailsHeader: IRenderFunction<IDetailsHeaderProps> = (props, defaultRender) => {
     if (!props) {
@@ -539,7 +550,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         const user = entry.User || "";
         const role = entry.Role ? ` (${entry.Role})` : "";
         const data = entry.Data || entry.comment || "";
-        return `[${date} ${time}]${user}${role} \n${title}:${data}`;
+        return `[${date} ${time}]${user}${role} - ${title}: ${data}`;
       }).join("\n\n");
 
     } catch (err) {
@@ -752,7 +763,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     try {
       await sp.utility.sendEmail(emailProps);
     } catch (error) {
-      console.error("Failed to send PM status change email", error);
+      console.error("Failed to send Requestor status change email", error);
     }
   }
 
@@ -764,7 +775,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
     const attachments = item.AttachmentFiles || [];
     const pmAttachments = attachments
-      .filter((att: any) => att.FileName.match(/_PM(\.[^.]*)?$/i))
+      .filter((att: any) => att.FileName.match(/PM(\.[^.]*)?$/i))
       .map((att: any) => ({ name: att.FileName, url: att.ServerRelativeUrl }));
 
     setPmAttachments(pmAttachments);
@@ -812,22 +823,22 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     loadFinanceAttachments(item);
   }
 
-  async function removeFinanceAttachment(fileName: string) {
-    if (!selectedItem) return;
-    try {
-      await sp.web.lists
-        .getByTitle('Invoice Requests')
-        .items.getById(selectedItem.Id)
-        .attachmentFiles.getByName(fileName)
-        .delete();
-      // Reload attachments after delete
-      const updatedItem = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedItem.Id).expand('AttachmentFiles')();
-      setSelectedItem(updatedItem);
-      loadFinanceAttachments(updatedItem);
-    } catch (error) {
-      console.error('Failed to remove finance attachment', error);
-    }
-  }
+  // async function removeFinanceAttachment(fileName: string) {
+  //   if (!selectedItem) return;
+  //   try {
+  //     await sp.web.lists
+  //       .getByTitle('Invoice Requests')
+  //       .items.getById(selectedItem.Id)
+  //       .attachmentFiles.getByName(fileName)
+  //       .delete();
+  //     // Reload attachments after delete
+  //     const updatedItem = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedItem.Id).expand('AttachmentFiles')();
+  //     setSelectedItem(updatedItem);
+  //     loadFinanceAttachments(updatedItem);
+  //   } catch (error) {
+  //     console.error('Failed to remove finance attachment', error);
+  //   }
+  // }
 
   async function handleClarification() {
     if (!selectedItem) return;
@@ -1000,7 +1011,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         const updatedItem = await sp.web.lists.getByTitle("Invoice Requests").items.getById(selectedItem.Id)();
         await sendPmStatusChangeEmail(updatedItem, originalStatus ?? "", selectedItem.Status ?? "");
       }
-
+      // await fetchData();
       setIsPanelOpen(false);
       setEditFields({});
       setAttachments([]);
@@ -1167,114 +1178,120 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                 }}
               >
                 {/* Two-column form layout */}
-                <Stack horizontal tokens={{ childrenGap: 36 }} styles={{ root: { width: '100%' } }}>
+                <Stack horizontal tokens={{ childrenGap: 25 }} styles={{ root: { width: '100%' } }}>
                   {/* Left column */}
                   <Stack tokens={{ childrenGap: 12 }} styles={{ root: { minWidth: 300, flex: 1 } }}>
                     <TextField label="Purchase Order" value={selectedItem?.PurchaseOrder || ''} disabled />
                     <TextField label="Project Name" value={selectedItem?.ProjectName || ''} disabled />
                     <TextField label="PO Item Title" value={selectedItem?.POItem_x0020_Title || ''} disabled />
-                    <TextField
-                      label="Invoice Number"
-                      value={editFields.InvoiceNumber || ''}
-                      onChange={(e, val) => {
-                        if (!invoiceNumberLoaded) handleFieldChange('InvoiceNumber', val || '');
-                      }}
-                      disabled={invoiceNumberLoaded}
-                    />
-                    <DatePicker
-                      label="Due Date"
-                      value={editFields.DueDate ? new Date(editFields.DueDate) : undefined}
-                      onSelectDate={date => handleFieldChange('DueDate', date ? date.toISOString() : '')}
-                    />
-                    <TextField
-                      label="Previous PM Comments"
-                      value={formatCommentHistory(selectedItem?.PMCommentsHistory) || ''}
-                      multiline
-                      rows={4}
-                      disabled
-                      styles={{ root: { backgroundColor: '#f3f2f1' } }}
-                    />
                   </Stack>
                   {/* Right column */}
                   <Stack tokens={{ childrenGap: 12 }} styles={{ root: { minWidth: 300, flex: 1 } }}>
                     <TextField label="Invoiced Amount" value={`${getCurrencySymbol(selectedItem.Currency)} ${selectedItem?.InvoiceAmount || ''}`} disabled />
                     <TextField label="Customer Contact" value={selectedItem?.Customer_x0020_Contact || ''} disabled />
                     <TextField label="PO Item Value" value={`${getCurrencySymbol(selectedItem.Currency)} ${selectedItem?.POItem_x0020_Value || ''}`} disabled />
-                    <Dropdown
-                      label="Invoice Status"
-                      options={InvstatusOptions}
-                      selectedKey={editFields.Status || selectedItem.Status || ''}
-                      onChange={(_, option) => handleFieldChange('Status', option?.key)}
-                    />
-                    <div style={{ height: 45 }}></div>
-                    <TextField
-                      label="Previous Finance Comments"
-                      value={formatCommentHistory(selectedItem?.FinanceCommentsHistory) || ''}
-                      multiline
-                      rows={4}
-                      disabled
-                      styles={{ root: { backgroundColor: '#f3f2f1' } }}
-                    />
                   </Stack>
                 </Stack>
-                {/* Below columns */}
-                <Stack tokens={{ childrenGap: 12 }} styles={{ root: { marginTop: 24 } }}>
+
+                {/* New row for Invoice Due Date, Invoice Number and Invoice Status */}
+                <Stack horizontal tokens={{ childrenGap: 20 }} styles={{ root: { marginTop: 12, alignItems: 'flex-end' } }}>
+                  <DatePicker
+                    label="Invoice Due Date"
+                    value={editFields.DueDate ? new Date(editFields.DueDate) : undefined}
+                    onSelectDate={date => handleFieldChange('DueDate', date ? date.toISOString() : '')}
+                    styles={{ root: { flex: 1 } }}
+                  />
+                  <TextField
+                    label="Invoice Number"
+                    value={editFields.InvoiceNumber || ''}
+                    onChange={(e, val) => {
+                      if (!invoiceNumberLoaded) handleFieldChange('InvoiceNumber', val || '');
+                    }}
+                    disabled={invoiceNumberLoaded}
+                    styles={{ root: { flex: 1 } }}
+                  />
+                  <Dropdown
+                    label="Invoice Status"
+                    options={InvstatusOptions}
+                    selectedKey={editFields.Status || selectedItem.Status || ''}
+                    onChange={(_, option) => handleFieldChange('Status', option?.key)}
+                    styles={{ root: { flex: 1 } }}
+                  />
+                </Stack>
+                <Stack tokens={{ childrenGap: 12 }} styles={{ root: { marginTop: 16 } }}>
+                  {/* Comment fields in separate rows */}
+                  <TextField
+                    label="Requestor Comments"
+                    value={formatCommentHistory(selectedItem?.PMCommentsHistory) || ''}
+                    multiline
+                    rows={4}
+                    disabled
+                  // styles={{ root: { backgroundColor: '#f3f2f1', marginTop: 24 } }}
+                  />
+                  <TextField
+                    label="Finance Comments"
+                    value={formatCommentHistory(selectedItem?.FinanceCommentsHistory) || ''}
+                    multiline
+                    rows={4}
+                    disabled
+                  // styles={{ root: { backgroundColor: '#f3f2f1', marginTop: 12 } }}
+                  />
                   <TextField
                     label="Finance Comments"
                     multiline
                     rows={5}
                     value={editFields.FinanceComments || ''}
                     onChange={(_, val) => handleFieldChange('FinanceComments', val || '')}
+                  // styles={{ root: { marginTop: 12 } }}
                   />
+                </Stack>
 
-                  <div>PM Attachments</div>
-                  {pmAttachments.length ? (
-                    <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
-                      {pmAttachments.map((att, i) => (
-                        <li
-                          key={i}
-                          style={{ cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center' }}
-                          onClick={() => {
-                            setViewerFileUrl(att.url);
-                            setViewerFileName(att.name);
-                            setIsViewerOpen(true);
-                          }}
-                        >
-                          <span style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}>
-                            {att.name}
-                          </span>
-                          <a
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ marginLeft: 12, color: '#605e5c', fontSize: 12 }}
-                          >
-                            Download
-                          </a>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setIsViewerOpen(false);
+
+                {/* Clarification button right below Finance Comments */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                  <PrimaryButton onClick={handleClarification} text="Ask Clarification" />
+                </div>
+
+                {/* Attachments - placed side by side in one row */}
+                <Stack horizontal tokens={{ childrenGap: 36 }}>
+                  <Stack styles={{ root: { flex: 1 } }}>
+                    <div style={{ fontWeight: '600', marginBottom: 8 }}>Requestor Attachments</div>
+                    {pmAttachments.length ? (
+                      <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                        {pmAttachments.map((att, i) => (
+                          <li
+                            key={i}
+                            style={{ cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center' }}
+                            onClick={() => {
+                              setViewerFileUrl(att.url);
+                              setViewerFileName(att.name);
+                              setIsDocPanelOpen(true);
                             }}
-                            style={{
-                              marginLeft: 8,
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#a4262c',
-                              cursor: 'pointer',
-                              fontWeight: 'bold',
-                            }}
-                            aria-label={`Clear preview of ${att.name}`}
                           >
-                            ×
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span style={{ color: '#888' }}>No PM attachments</span>
-                  )}
-                  <div style={{ marginTop: 20 }}>
+                            <span style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}>
+                              {att.name}
+                            </span>
+                            <IconButton
+                              iconProps={{ iconName: 'Download' }}
+                              title={`Download ${att.name}`}
+                              ariaLabel={`Download ${att.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const link = document.createElement('a');
+                                link.href = att.url;
+                                link.download = att.name;
+                                link.click();
+                              }}
+                            // style={{ marginLeft: 12 }}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span style={{ color: '#888' }}>No Requestor attachments</span>
+                    )}
+                  </Stack>
+                  <Stack styles={{ root: { flex: 1 } }}>
                     <div style={{ fontWeight: '600', marginBottom: 8 }}>Finance Attachments</div>
                     {financeAttachments.length ? (
                       <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
@@ -1289,272 +1306,197 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                             }}
                           >
                             <span style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}>{att.name}</span>
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ marginLeft: 12, color: '#605e5c', fontSize: 12 }}
-                            >
-                              Download
-                            </a>
-                            <button
+                            <IconButton
+                              iconProps={{ iconName: 'Download' }}
+                              title={`Download ${att.name}`}
+                              ariaLabel={`Download ${att.name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                // Remove finance attachment logic here
-                                removeFinanceAttachment(att.name);
+                                const link = document.createElement('a');
+                                link.href = att.url;
+                                link.download = att.name;
+                                link.click();
                               }}
-                              style={{
-                                marginLeft: 8,
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#a4262c',
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                              }}
-                              aria-label={`Remove attachment ${att.name}`}
-                              title={`Remove attachment ${att.name}`}
-                            >
-                              ×
-                            </button>
+                            // style={{ marginLeft: 12 }}
+                            />
                           </li>
                         ))}
                       </ul>
                     ) : (
                       <div style={{ color: '#888' }}>No Finance attachments</div>
                     )}
-                  </div>
-                  <div style={{ marginTop: 20 }}>Finance Attachments</div>
-                  <div
-                    onDrop={e => {
-                      e.preventDefault();
-                      const files = Array.from(e.dataTransfer.files);
-                      if (files.length) setAttachments(files);
-                      setIsDragActive(false);
-                    }}
-                    onDragOver={e => {
-                      e.preventDefault();
-                      setIsDragActive(true);
-                    }}
-                    onDragLeave={e => {
-                      e.preventDefault();
-                      setIsDragActive(false);
-                    }}
-                    onClick={() => document.getElementById('finance-attachment-input')?.click()}
-                    style={{
-                      border: isDragActive ? '2px solid #0078d4' : '2px dashed #ccc',
-                      borderRadius: 8,
-                      padding: 20,
-                      marginTop: 8,
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      color: '#666',
-                      userSelect: 'none',
-                    }}
-                  >
-                    <input
-                      id="finance-attachment-input"
-                      type="file"
-                      multiple
-                      accept="*/*"
-                      style={{ display: 'none' }}
-                      onChange={handleFileChange}
-                    />
-                    <i className='ms-Icon ms-Icon--Attach' style={{ fontSize: 46, color: '#aaa' }} aria-hidden="true"></i>
-                    <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload</div>
-                    {attachments.length ? (
-                      <>
-                        <div style={{ marginTop: 15, fontSize: 14, color: '#107c10' }}>
-                          Selected: {attachments.map(f => f.name).join(', ')}
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
-                  {/* List of newly added finance attachments with preview and remove */}
-                  {attachments.length > 0 && (
-                    <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
-                      {attachments.map((file, index) => (
-                        <li
-                          key={index}
-                          style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
-                        >
-                          <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => {
-                              setViewerFileUrl(URL.createObjectURL(file));
-                              // openPreviewPanel(URL.createObjectURL(file), file.name);
-                              setViewerFileName(file.name);
-                              setIsViewerOpen(true);
-                            }}>
-                            {file.name}
-                          </span>
-                          <button onClick={(e) => {
-                            e.stopPropagation();
-                            const objectUrl = URL.createObjectURL(file); // 'file' is the variable holding an actual File or Blob
-                            setViewerFileUrl(objectUrl);
+                  </Stack>
+                </Stack>
+
+                {/* Drag and drop or click upload zone for new finance attachments */}
+                <div
+                  onDrop={e => {
+                    e.preventDefault();
+                    const files = Array.from(e.dataTransfer.files);
+                    if (files.length) setAttachments(files);
+                    setIsDragActive(false);
+                  }}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    setIsDragActive(true);
+                  }}
+                  onDragLeave={e => {
+                    e.preventDefault();
+                    setIsDragActive(false);
+                  }}
+                  onClick={() => document.getElementById('finance-attachment-input')?.click()}
+                  style={{
+                    border: isDragActive ? '2px solid #0078d4' : '2px dashed #ccc',
+                    borderRadius: 8,
+                    padding: 20,
+                    marginTop: 20,
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    color: '#666',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    id="finance-attachment-input"
+                    type="file"
+                    multiple
+                    accept="*/*"
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                  />
+                  <i className='ms-Icon ms-Icon--Attach' style={{ fontSize: 46, color: '#aaa' }} aria-hidden="true"></i>
+                  <div style={{ marginTop: 12, fontWeight: 600 }}>Drop files here or click to upload attachments</div>
+                  {attachments.length ? (
+                    <div style={{ marginTop: 15, fontSize: 14, color: '#107c10' }}>
+                      Selected: {attachments.map(f => f.name).join(', ')}
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* List of newly added finance attachments with preview and remove */}
+                {attachments.length > 0 && (
+                  <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                    {attachments.map((file, index) => (
+                      <li
+                        key={index}
+                        style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
+                      >
+                        <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={() => {
+                            setViewerFileUrl(URL.createObjectURL(file));
                             setViewerFileName(file.name);
                             setIsViewerOpen(true);
                           }}>
-                            Preview
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // setIsPreviewing(true);
-                              // Remove this file from attachments
-                              setAttachments((prev) =>
-                                prev.filter((_, i) => i !== index)
-                              );
-                              // If preview open and currently previewing this file, close viewer
-                              if (viewerFileName === file.name) {
-                                setIsViewerOpen(false);
-                                setViewerFileUrl(null);
-                                setViewerFileName(null);
-                              }
-                            }}
-                            style={{
-                              marginLeft: 8,
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#a4262c',
-                              cursor: 'pointer',
-                              fontWeight: 'bold',
-                            }}
-                            aria-label={`Remove ${file.name}`}
-                          >
-                            ×
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {/* <div style={{ marginTop: 20 }}>
-                    <div>Previous Finance Attachments</div>
-                    {financeAttachments.length > 0 ? (
-                      <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
-                        {financeAttachments.map((att, i) => (
-                          <li
-                            key={i}
-                            style={{ cursor: 'pointer', marginBottom: 6, display: 'flex', alignItems: 'center' }}
-                          >
-                            <span
-                              style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}
-                              onClick={() => {
-                                setViewerFileUrl(att.url);
-                                setViewerFileName(att.name);
-                                setIsViewerOpen(true);
-                              }}
-                            >
-                              {att.name}
-                            </span>
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                // Remove attachment from list
-                                loadFinanceAttachments((prev: any) => prev.filter((_: any, index: any) => index !== i));
-                                // Close viewer if it's viewing this file
-                                if (viewerFileName === att.name) {
-                                  setIsViewerOpen(false);
-                                  setViewerFileUrl(null);
-                                  setViewerFileName(null);
-                                }
-                              }}
-                              style={{
-                                marginLeft: 8,
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#a4262c',
-                                cursor: 'pointer',
-                                fontWeight: 'bold'
-                              }}
-                              aria-label={`Remove ${att.name}`}
-                              title={`Remove ${att.name}`}
-                            >
-                              ×
-                            </button>
-                            <button
-                              onClick={e => {
-                                // e.stopPropagation();
-                                openPreviewPanel(att.url, att.name)
-                                // setViewerFileUrl(att.url);
-                                // setViewerFileName(att.name);
-                                // setIsViewerOpen(true);
-                              }}
-                              style={{ marginLeft: 8 }}
-                              title={`Preview ${att.name}`}
-                            >
-                              Preview
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div style={{ color: '#888' }}>No previous attachments</div>
-                    )}
-                  </div>; */}
-                </Stack>
-                <div style={{ height: 62 }}></div>
-                {/* Buttons */}
-                <div style={{ height: 28, marginTop: 25 }} />
-                <Stack horizontal tokens={{ childrenGap: 60 }} styles={{ root: { marginTop: 25, justifyContent: 'center' } }}>
-                  <PrimaryButton onClick={handleClarification} text="Ask Clarification" />
-                  <PrimaryButton onClick={handleSave} text="Submit" disabled={loading} />
-                </Stack>
-              </Stack>
-            )}
+                          {file.name}
+                        </span>
+                        <button onClick={(e) => {
+                          e.stopPropagation();
+                          const objectUrl = URL.createObjectURL(file);
+                          setViewerFileUrl(objectUrl);
+                          setViewerFileName(file.name);
+                          setIsDocPanelOpen(true);
+                        }}>
+                          Preview
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAttachments((prev) =>
+                              prev.filter((_, i) => i !== index)
+                            );
+                            if (viewerFileName === file.name) {
+                              setIsViewerOpen(false);
+                              setViewerFileUrl(null);
+                              setViewerFileName(null);
+                            }
+                          }}
+                          style={{
+                            marginLeft: 8,
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#a4262c',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                          }}
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            {isViewerOpen && (
-              // ---- Full-width Document Viewer ----
-              <Stack
-                styles={{
-                  root: {
-                    flexGrow: 1,
-                    minWidth: 0,
-                    maxWidth: '100%',
-                    backgroundColor: '#f3f2f1',
-                    borderTopRightRadius: 12,
-                    borderBottomRightRadius: 12,
-                    boxShadow: '-4px 0 8px rgba(0,0,0,0.1)',
-                    position: 'relative',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: 'calc(100vh - 150px)',
-                    overflow: 'hidden',
-                    zIndex: 10,
-                  },
-                }}
-              >
-                <PrimaryButton
-                  style={{ position: 'absolute', top: 8, right: 8, zIndex: 20 }}
-                  iconProps={{ iconName: 'Cancel' }}
-                  title="Close Viewer"
-                  ariaLabel="Close Viewer"
-                  onClick={() => {
-                    setIsViewerOpen(false);
-                    setViewerFileUrl(null);
-                    setViewerFileName(null);
-                    // selectedItem and panel remain unchanged
-                  }}
-                />
-                <div style={{ flexGrow: 1, overflow: 'auto' }}>
-                  <DocumentViewer
-                    url={viewerFileUrl || ''}
-                    isOpen={isViewerOpen}
-                    onDismiss={() => {
-                      setIsViewerOpen(false);
-                      setViewerFileUrl(null);
-                      setViewerFileName(null);
-                    }}
-                    fileName={viewerFileName || ''}
-                  />
-                </div>
+                <div style={{ height: 62 }}></div>
+
+                {/* Submit button row */}
+                <Stack horizontal tokens={{ childrenGap: 60 }} styles={{ root: { marginTop: 35, justifyContent: 'center' } }}>
+                  <PrimaryButton onClick={handleSave} text="Submit" disabled={loading} style={{ marginTop: 18 }} />
+                </Stack>
               </Stack>
             )}
           </Stack>
         )}
-
+        {/* Document viewer panel unchanged */}
+        <Panel
+          isOpen={isDocPanelOpen}
+          onDismiss={handleDocPanelDismiss}
+          type={PanelType.custom}
+          customWidth="1000px"
+          isBlocking={false}
+          isFooterAtBottom={false}
+          styles={{
+            main: {
+              height: 'auto',
+              margin: 'auto',
+              borderRadius: 12,
+            },
+            scrollableContent: {
+              overflowY: 'auto',
+              padding: 5,
+            }
+          }}
+        >
+          {isDocPanelOpen && (
+            <Stack
+              styles={{
+                root: {
+                  flexGrow: 1,
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  backgroundColor: '#f3f2f1',
+                  borderTopRightRadius: 12,
+                  borderBottomRightRadius: 12,
+                  boxShadow: '-4px 0 8px rgba(0,0,0,0.1)',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: 'calc(100vh - 150px)',
+                  overflow: 'hidden',
+                  zIndex: 10,
+                },
+              }}
+            >
+              <div style={{ flexGrow: 1, overflow: 'auto' }}>
+                <DocumentViewer
+                  url={viewerFileUrl || ''}
+                  isOpen={isDocPanelOpen}
+                  onDismiss={() => {
+                    setIsDocPanelOpen(false);
+                    setViewerFileUrl(null);
+                    setViewerFileName(null);
+                  }}
+                  fileName={viewerFileName || ''}
+                />
+              </div>
+            </Stack>
+          )}
+        </Panel>
       </Panel>
+
       <Dialog
         hidden={!dialogVisible}
-        onDismiss={() => { handleDialogClose }}
+        onDismiss={handleDialogClose}
         dialogContentProps={{
           type: dialogType === 'error' ? DialogType.largeHeader : DialogType.normal,
           title: dialogType === 'error' ? 'Error' : 'Success',
@@ -1563,7 +1505,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
         modalProps={{ isBlocking: false }}
       >
         <DialogFooter>
-          <PrimaryButton onClick={handleDialogClose} text="OK" />
+          <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <PrimaryButton onClick={handleDialogClose} text="OK" />
+          </div>
         </DialogFooter>
       </Dialog>
     </section>

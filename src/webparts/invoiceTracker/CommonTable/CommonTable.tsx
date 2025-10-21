@@ -12,8 +12,8 @@ export default class CommonTable extends React.Component<ICommonTableProps, ICom
     this.state = {
       items: []
     };
-    this.selection = new Selection({ 
-      onSelectionChanged: () => { this._getNewSelectionDetails(); } 
+    this.selection = new Selection({
+      onSelectionChanged: () => { this._getNewSelectionDetails(); }
     });
   }
 
@@ -28,21 +28,31 @@ export default class CommonTable extends React.Component<ICommonTableProps, ICom
     return (
       <div className={styles.commonTable + " ms-Grid"}>
         <div className={"ms-Grid-row " + styles.topSpace}>
-          <div className={"ms-Grid-col ms-sm12 ms-md12 ms-lg12 "}>
-            <DetailsList
-              columns={this.props.mainColumns}
-              items={this.props.tableContent}
-              selection={this.selection}
-              selectionMode={this.props.selectionMode ? this.props.selectionMode : SelectionMode.single}
-              isHeaderVisible={true}
-              styles={{
-                headerWrapper: {
-                  selectors: {
-                    '.ms-DetailsHeader-cellTitle': { fontWeight: 700 }
+          <div className={"ms-Grid-col ms-sm12 ms-md12 ms-lg12"}>
+            
+            {/* Scrollable area for sticky header */}
+            <div className={styles.tableContainer}>
+              <DetailsList
+                columns={this.props.mainColumns}
+                items={this.props.tableContent}
+                selection={this.selection}
+                selectionMode={this.props.selectionMode ? this.props.selectionMode : SelectionMode.single}
+                isHeaderVisible={true}
+                styles={{
+                  headerWrapper: {
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    background: 'white',
+                    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+                    selectors: {
+                      '.ms-DetailsHeader-cellTitle': { fontWeight: 700 }
+                    }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            </div>
+
           </div>
           <div className={"ms-Grid-col ms-sm12 ms-md12 ms-lg12 " + styles.emptyList}>
             {!this.props.tableContent.length && <label>No items found</label>}

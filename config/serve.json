@@ -2,5 +2,5 @@
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json",
   "port": 4321,
   "https": true,
-  "initialPage": "https://sachagroup.sharepoint.com/sites/staging.InvoiceTracker/_layouts/15/workbench.aspx"
+  "initialPage": "https://sachagroup.sharepoint.com/sites/dev.InvoiceTracker/_layouts/15/workbench.aspx"
 }

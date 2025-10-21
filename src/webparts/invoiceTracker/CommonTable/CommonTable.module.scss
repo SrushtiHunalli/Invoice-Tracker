@@ -1,6 +1,18 @@
 :global #workbenchPageContent {
   max-width: 100% !important;
 }
+
+.tableContainer {
+  max-height: 60vh; /* adjust as needed */
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: white;
+
+  /* Optional: smooth scroll */
+  scroll-behavior: smooth;
+}
+
 .commonTable{
     .btnStyle{
         text-align: right;

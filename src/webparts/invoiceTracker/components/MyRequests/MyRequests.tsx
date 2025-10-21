@@ -3,6 +3,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+// import CommonTable from "../../CommonTable/CommonTable"
 import {
   DetailsList,
   SelectionMode,
@@ -54,9 +55,6 @@ interface MyProps {
   onNavigate?: (pageKey: string, params?: any) => void;
   projectsp: SPFI;
   getCurrentPageUrl?: () => string;
-}
-interface InvoiceRequestCardProps {
-  invoice: InvoiceRequest;
 }
 interface InvoiceRequest {
   Id: number;
@@ -116,49 +114,135 @@ const primaryColor = spTheme?.themePrimary || "#0078d4";
 const steps = ["Request Submitted", "Not Generated", "Invoice Raised", "Pending Payment", "Payment Received", "Cancelled"];
 // const spTheme = (window as any).__themeState__?.theme;
 // const primaryColor = spTheme?.themePrimary || "#0078d4";
+// function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps: string[] }) {
+//   let visibleSteps: string[] = [];
+//   let onlyCancelledStep = false;
+
+//   // Logic to determine which steps to show based on currentStatus
+//   if (currentStatus === "Cancelled") {
+
+//     visibleSteps = ["Cancelled"];
+//     onlyCancelledStep = true;
+
+//   } else {
+//     visibleSteps = ["Request Submitted", "Not Generated", "Invoice Raised", "Pending Payment", "Payment Received"];
+//   }
+//   const currentStep = visibleSteps.indexOf(currentStatus);
+//   return (
+//     <div style={{ margin: "40px 0 16px 0" }}>
+//       <div style={{ display: "flex", alignItems: "center" }}>
+//         {visibleSteps.map((visibleSteps, idx) => {
+//           let circleBorder = "#E5AF5";
+//           let circleBg = "#fff";
+//           let dotColor = "#166BDD";
+//           let connectorBg = "#E5AF5";
+//           let dot = null;
+//           if (onlyCancelledStep) {
+//             circleBorder = "FF0000"; // red border
+//             circleBg = "#fff";
+//             dot = <span style={{ color: "red", fontWeight: "bold", fontSize: 18 }}>X</span>;
+//           }
+//           else if (idx === visibleSteps.length - 1 && currentStep === idx) {
+//             circleBorder = "#20bb55";
+//             circleBg = "#20bb55";
+//             dot = <span style={{ fontWeight: "bold", fontSize: 18, color: "#fff" }}>✓</span>;
+//           } else if (idx === currentStep) {
+//             dot = <span style={{ width: 10, height: 10, borderRadius: "50%", background: dotColor, display: "block" }} />;
+//             circleBorder = "#166BDD";
+//           } else if (idx < currentStep) {
+//             circleBorder = "#166BDD";
+//             circleBg = "#166BDD";
+//             dot = <span style={{ fontWeight: "bold", fontSize: 18, color: "#fff" }}>✓</span>;
+//             connectorBg = "#166BDD";
+//           }
+//           return (
+//             <React.Fragment key={`step-${visibleSteps}`}>
+//               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+//                 <div
+//                   style={{
+//                     width: 28,
+//                     height: 28,
+//                     borderRadius: "50%",
+//                     border: `2px solid ${circleBorder}`,
+//                     background: circleBg,
+//                     display: "flex",
+//                     justifyContent: "center",
+//                     alignItems: "center",
+//                     marginBottom: 6,
+//                     fontWeight: 600,
+//                   }}
+//                 >
+//                   {dot}
+//                 </div>
+//                 <div
+//                   style={{
+//                     fontSize: 12,
+//                     color: idx <= currentStep ? (idx === visibleSteps.length - 1 && currentStep >= idx ? "#20bb55" : "#166BDD") : "#A0A5AF",
+//                     fontWeight: idx === currentStep ? 600 : 400,
+//                     textAlign: "center",
+//                     minWidth: 72,
+//                     userSelect: "none",
+//                   }}
+//                 >
+//                   {visibleSteps}
+//                 </div>
+//               </div>
+//               {idx < visibleSteps.length - 1 && <div style={{ flex: 1, height: 2, background: connectorBg, margin: "0 4px" }} />}
+//             </React.Fragment>
+//           );
+//         })}
+//       </div>
+//     </div>
+//   );
+// }
+
 function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps: string[] }) {
   let visibleSteps: string[] = [];
   let onlyCancelledStep = false;
 
   // Logic to determine which steps to show based on currentStatus
   if (currentStatus === "Cancelled") {
-
     visibleSteps = ["Cancelled"];
     onlyCancelledStep = true;
-
   } else {
     visibleSteps = ["Request Submitted", "Not Generated", "Invoice Raised", "Pending Payment", "Payment Received"];
   }
+
   const currentStep = visibleSteps.indexOf(currentStatus);
+
   return (
     <div style={{ margin: "40px 0 16px 0" }}>
       <div style={{ display: "flex", alignItems: "center" }}>
-        {visibleSteps.map((visibleSteps, idx) => {
+        {visibleSteps.map((step, idx) => {
           let circleBorder = "#E5AF5";
           let circleBg = "#fff";
           let dotColor = "#166BDD";
           let connectorBg = "#E5AF5";
-          let dot = null;
+          let dot: JSX.Element | null = null;
+
           if (onlyCancelledStep) {
-            circleBorder = "FF0000"; // red border
+            circleBorder = "#FF0000"; // red border for Cancelled
             circleBg = "#fff";
             dot = <span style={{ color: "red", fontWeight: "bold", fontSize: 18 }}>X</span>;
-          }
-          else if (idx === visibleSteps.length - 1 && currentStep === idx) {
+          } else if (step === "Payment Received" && currentStep === idx) {
+            // Current step is Payment Received
             circleBorder = "#20bb55";
-            circleBg = "#20bb55";
+            circleBg = "#1ae962ff";
             dot = <span style={{ fontWeight: "bold", fontSize: 18, color: "#fff" }}>✓</span>;
           } else if (idx === currentStep) {
+            // Current step (not Payment Received)
             dot = <span style={{ width: 10, height: 10, borderRadius: "50%", background: dotColor, display: "block" }} />;
             circleBorder = "#166BDD";
           } else if (idx < currentStep) {
-            circleBorder = "#166BDD";
+            // Steps before current (completed)
+            circleBorder = "#1469daff";
             circleBg = "#166BDD";
             dot = <span style={{ fontWeight: "bold", fontSize: 18, color: "#fff" }}>✓</span>;
             connectorBg = "#166BDD";
           }
+
           return (
-            <React.Fragment key={`step-${visibleSteps}`}>
+            <React.Fragment key={`step-${step}`}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <div
                   style={{
@@ -179,14 +263,14 @@ function StatusStepper({ currentStatus, steps }: { currentStatus: string; steps:
                 <div
                   style={{
                     fontSize: 12,
-                    color: idx <= currentStep ? (idx === visibleSteps.length - 1 && currentStep >= idx ? "#20bb55" : "#166BDD") : "#A0A5AF",
+                    color: idx <= currentStep ? (step === "Payment Received" && currentStep >= idx ? "#20bb55" : "#166BDD") : "#A0A5AF",
                     fontWeight: idx === currentStep ? 600 : 400,
                     textAlign: "center",
                     minWidth: 72,
                     userSelect: "none",
                   }}
                 >
-                  {visibleSteps}
+                  {step}
                 </div>
               </div>
               {idx < visibleSteps.length - 1 && <div style={{ flex: 1, height: 2, background: connectorBg, margin: "0 4px" }} />}
@@ -356,7 +440,7 @@ function InvoiceDetailsCard({
       {
         item.PMCommentsHistory && formatCommentsHistory(item.PMCommentsHistory).trim() !== "" && (
           <Stack>
-            <Text variant="mediumPlus" styles={{ root: { fontSize: 13, fontWeight: 600, color: primaryColor } }}>PM Comments</Text>
+            <Text variant="mediumPlus" styles={{ root: { fontSize: 13, fontWeight: 600, color: primaryColor } }}>Requestor Comments</Text>
             <div style={{
               maxHeight: 180,
               overflowY: "auto",
@@ -507,8 +591,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   });
 
   const dropdownStyles: Partial<IDropdownStyles> = {
-    dropdown: { width: 300 },
-    callout: { minWidth: 350 },
+    dropdown: { width: 200 },
+    callout: { minWidth: 200 },
     dropdownItem: {
       whiteSpace: 'normal',
       textOverflow: 'clip',
@@ -537,7 +621,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
 
       if (aVal instanceof Date) aVal = aVal.getTime();
       if (bVal instanceof Date) bVal = bVal.getTime();
-      console.log(`Sorting by ${columnKey}`, aVal, bVal);
 
 
       if (typeof aVal === 'number' && typeof bVal === 'number') {
@@ -829,7 +912,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     },
     {
       key: "PMCommentsHistory",
-      name: "PM Comments",
+      name: "Requestor Comments",
       fieldName: "PMCommentsHistory",
       minWidth: 200,
       maxWidth: 350,
@@ -838,7 +921,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     },
     {
       key: "FinanceCommentsHistory",
-      name: "Finance Comments History",
+      name: "Finance Comments",
       fieldName: "FinanceCommentsHistory",
       minWidth: 200,
       maxWidth: 350,
@@ -847,49 +930,9 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     },
 
   ];
-  const fieldStyle = {
-    root: { marginBottom: 8, display: 'flex' },
-    label: { fontWeight: 600, width: 180, color: primaryColor, fontSize: 15 },
-    value: { fontWeight: 400, color: '#303030', fontSize: 15 }
-  };
-
-  const historyStyle = {
-    root: { background: '#f6f8fa', padding: '7px 14px', borderRadius: 6, marginBottom: 8, fontSize: 14 }
-  };
-
   // Helper to render text or fallback
   const renderValue = (value: any) => value ? value : <span style={{ color: '#999' }}>—</span>;
 
-  const InvoiceRequestCard: React.FC<InvoiceRequestCardProps> = ({ invoice }) => (
-    <Stack tokens={{ childrenGap: 18 }} styles={{ root: { background: '#fff', borderRadius: 10, boxShadow: '0 2px 16px #edf1f3', padding: 28, margin: '0 auto', width: '100%', maxWidth: 650 } }}>
-      <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor } }} />
-      <Text variant="xLarge" styles={{ root: { marginBottom: 12, fontWeight: 600, color: primaryColor } }}>Invoice Request Details</Text>
-      <Separator />
-
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Title</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Title)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>PO Item Value</div><div style={fieldStyle.value}>{renderValue(invoice.POItem_x0020_Value)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoiced Amount</div><div style={fieldStyle.value}>{renderValue(invoice.POAmount)}</div></div>
-      <div style={{ ...fieldStyle.root }}><div style={{ ...fieldStyle.label }}>Invoiced % (PO)</div><div style={{ ...fieldStyle.value }}>{calculateInvoicedPercentForPO(invoice.PurchaseOrder, invoiceRequests).toFixed(0)}%</div></div>
-      <div style={{ ...fieldStyle.root }}><div style={{ ...fieldStyle.label }}>PO invoice Invoiced %</div><div style={{ ...fieldStyle.value }}>{calculateInvoicedPercentForPOItem(invoice.PurchaseOrder, invoice.POItem_x0020_Title, invoice.POItem_x0020_Value, invoiceRequests).toFixed(0)}%</div></div>
-
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Invoice Status</div><div style={fieldStyle.value}>{renderValue(invoice.Status)}</div></div>
-
-      <Separator />
-
-      <div style={fieldStyle.label}>PM Comments History</div>
-      <div style={historyStyle.root}>{renderValue(formatCommentsHistory(invoice.PMCommentsHistory))}</div>
-
-      <div style={fieldStyle.label}>Finance Comments History</div>
-      <div style={historyStyle.root}>{renderValue(formatCommentsHistory(invoice.FinanceCommentsHistory))}</div>
-
-      <Separator />
-
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created</div><div style={fieldStyle.value}>{renderValue(invoice.Created)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Created By</div><div style={fieldStyle.value}>{renderValue(invoice.Author?.Title)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified</div><div style={fieldStyle.value}>{renderValue(invoice.Modified)}</div></div>
-      <div style={fieldStyle.root}><div style={fieldStyle.label}>Modified By</div><div style={fieldStyle.value}>{renderValue(invoice.Editor?.Title)}</div></div>
-    </Stack>
-  );
   const [selection] = useState(
     new Selection({
       onSelectionChanged: () => {
@@ -957,7 +1000,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     (filterProjectName === "All" || !filterProjectName) &&
     (filterInvoiceStatus === "All" || !filterInvoiceStatus) &&
     (filterCurrentStatus === "All" || !filterCurrentStatus) &&
-    (filterFinanceStatus === "All" || !filterFinanceStatus);
+    (filterFinanceStatus === "All" || !filterFinanceStatus) &&
+    (invoicePercentStatusFilter === null || invoicePercentStatusFilter === "All");
 
   useEffect(() => {
     async function loadData() {
@@ -1010,42 +1054,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     }
   }, [selectedReq]);
 
-  // useEffect(() => {
-  //   async function loadSelectedInvoice() {
-  //     if (initialFilters?.selectedInvoice) {
-  //       const invoiceId = Number(initialFilters.selectedInvoice);
-  //       if (invoiceId) {
-  //         try {
-  //           const invoice = await fetchInvoiceRequestById(sp, invoiceId);
-  //           if (invoice) {
-  //             setSelectedReq(invoice);
-  //             setShowHierPanel(true);
-  //           }
-  //         } catch (error) {
-  //           console.error("Failed to load invoice", error);
-  //         }
-  //       }
-  //     } else if (window.location.hash) {
-  //       const hash = window.location.hash;
-  //       const queryString = hash.split('?')[1];
-  //       const searchParams = new URLSearchParams(queryString);
-  //       const invoiceId = Number(searchParams.get('selectedInvoice'));
-  //       if (invoiceId) {
-  //         try {
-  //           const invoice = await fetchInvoiceRequestById(sp, invoiceId);
-  //           if (invoice) {
-  //             setSelectedReq(invoice);
-  //             setShowHierPanel(true);
-  //           }
-  //         } catch (error) {
-  //           console.error("Failed to load invoice", error);
-  //         }
-  //       }
-  //     }
-  //   }
-  //   loadSelectedInvoice();
-  // }, [initialFilters]);
-
   useEffect(() => {
     async function loadSelectedInvoiceAndHierarchy() {
       if (initialFilters?.selectedInvoice) {
@@ -1067,6 +1075,13 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     }
     loadSelectedInvoiceAndHierarchy();
   }, [initialFilters, invoicePOs, invoiceRequests]);
+
+  // useEffect(() => {
+  //   const style = document.createElement('style');
+  //   style.innerHTML = '[class*="contentContainer-"] { inset: unset !important; }';
+  //   document.head.appendChild(style);
+  //   return () => { document.head.removeChild(style); };
+  // }, []);
 
 
   const filteredItems = React.useMemo(() => {
@@ -1421,10 +1436,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
         (!req["POItem_x0020_Title"] ||
           !lineItems.some((li) => li.POID === req["POItem_x0020_Title"]))
     );
-    console.log("Building hierarchy for main PO:", mainPO);
-    console.log("lineItemGroups");
-    console.log("childPOGroups");
-    console.log("mainPORequests");
     return { mainPO, lineItemGroups, childPOGroups, mainPORequests };
   }
 
@@ -1502,13 +1513,10 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   }
   function getAllPOItemsForList(h: POHierarchy | null) {
     if (!h) {
-      console.log("getAllPOItemsForList: Received null or undefined hierarchy");
       return [];
     }
-    console.log("getAllPOItemsForList: input hierarchy:", h);
 
     const lineItems = h.lineItemGroups.map((g) => {
-      console.log("Processing line item group:", g);
       return {
         POID: g.poItem.POID,
         POAmount: g.poItem.POAmount,
@@ -1516,7 +1524,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     });
 
     const childPOs = h.childPOGroups.map((g) => {
-      console.log("Processing child PO group:", g);
       return {
         POID: g.childPO.POID,
         POAmount: g.childPO.POAmount,
@@ -1524,7 +1531,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     });
 
     const combined = [...lineItems, ...childPOs];
-    console.log("getAllPOItemsForList: combined PO items:", combined);
     return combined;
   }
 
@@ -1673,7 +1679,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
               placeholder="Search"
               value={searchText}
               onChange={(e, val) => setSearchText(val || "")}
-              styles={{ root: { width: 320 } }}  // Double length
+              styles={{ root: { width: 270 } }}  // Double length
             />
           </div>
           <div>
@@ -1747,7 +1753,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       ) : (
         <>
           <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
-            <div style={{ height: 300, position: 'relative' }}>
+
+            <div style={{ height: 300, position: 'relative', overflow: 'auto' }}>
               <ScrollablePane>
                 <div
                   className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
@@ -1967,13 +1974,13 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                   onChange={(_, val) => setClarifyComment(val || '')}
                 />
                 <TextField
-                  label="PM Comment History"
+                  label="Requestor Comment"
                   value={formatCommentsHistory(selectedReq.PMCommentsHistory)}
                   multiline
                   disabled
                 />
                 <TextField
-                  label="Finance Comments History"
+                  label="Finance Comments"
                   value={formatCommentsHistory(selectedReq.FinanceCommentsHistory)}
                   multiline
                   disabled
@@ -1984,11 +1991,11 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     disabled={clarifyLoading || clarifyInvoiceAmount === undefined}
                     onClick={handleClarifySubmit}
                     style={{
-                      background: '#7d0c71',
+                      background: primaryColor,
                       color: '#fff',
                       padding: '8px 24px',
                       border: 'none',
-                      borderRadius: 4,
+                      // borderRadius: 4,
                       cursor: 'pointer'
                     }}
                   >
@@ -2023,11 +2030,160 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
           </Panel>
           <Panel
             isOpen={isInvoiceRequestViewPanelOpen}
-            onDismiss={() => { setIsInvoiceRequestViewPanelOpen(false); setSelectedInvoiceRequest(null); }}
-            headerText=""
+            onDismiss={() => {
+              setIsInvoiceRequestViewPanelOpen(false);
+              setSelectedInvoiceRequest(null);
+            }}
+            headerText="Invoice Request Details"
             type={PanelType.medium}
+            styles={{
+              content: { padding: 20 }, // More generous padding
+              headerText: { fontWeight: 600, fontSize: 22, color: primaryColor }
+            }}
           >
-            {selectedInvoiceRequest && <InvoiceRequestCard invoice={selectedInvoiceRequest} />}
+            {selectedInvoiceRequest && (
+              <Stack tokens={{ childrenGap: 24 }}>
+                {/* <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor, marginBottom: 12 } }} /> */}
+
+                {/* Main Data Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)', // two columns
+                  gap: 24,
+                  background: '#f9f9f9',
+                  padding: 20,
+                  borderRadius: 12,
+                  marginBottom: 24
+                }}>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Title: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItem_x0020_Title)}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItem_x0020_Value)}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POAmount)}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Status)}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>POID Invoiced % (PO): </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
+                      {calculateInvoicedPercentForPO(
+                        selectedInvoiceRequest.PurchaseOrder,
+                        invoiceRequests
+                      ).toFixed(0)}%
+                    </Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>POItem Invoiced %: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
+                      {calculateInvoicedPercentForPOItem(
+                        selectedInvoiceRequest.PurchaseOrder,
+                        selectedInvoiceRequest.POItem_x0020_Title,
+                        selectedInvoiceRequest.POItem_x0020_Value,
+                        invoiceRequests
+                      ).toFixed(0)}%
+                    </Text>
+                  </div>
+                </div>
+
+                {/* Comments Section */}
+                <Stack tokens={{ childrenGap: 18 }}>
+                  {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Requestor Comments</Text> */}
+                  {/* <div style={{
+                    background: '#fff',
+                    border: '1px solid #eee',
+                    borderRadius: 8,
+                    padding: 14,
+                    minHeight: 50,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                  }}> */}
+                  {formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory)?.trim() && (
+                  <TextField
+                    label="Requestor Comments"
+                    value={(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
+                    multiline
+                    disabled
+                    styles={{
+                      root: {},
+                      subComponentStyles: {
+                        label: {
+                          root: {
+                            color: primaryColor,
+                            fontWeight: 600
+                          }
+                        }
+                      }
+                    }}
+                  />)}
+                  {/* {renderValue(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
+                  </div> */}
+
+                  {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Finance Comments</Text> */}
+                  {/* <div style={{
+                    background: '#fff',
+                    border: '1px solid #eee',
+                    borderRadius: 8,
+                    padding: 14,
+                    minHeight: 50,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                  }}> */}
+                  {formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)?.trim() && (
+                  <TextField
+                    label="Finance Comments"
+                    value={formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
+                    multiline
+                    disabled
+                    styles={{
+                      root: {},
+                      subComponentStyles: {
+                        label: {
+                          root: {
+                            color: primaryColor,
+                            fontWeight: 600
+                          }
+                        }
+                      }
+                    }}
+                  />)}
+                  {/* </div> */}
+                </Stack>
+
+                {/* Metadata */}
+                <Separator styles={{ root: { marginTop: 16, marginBottom: 16 } }} />
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 18,
+                  padding: 14,
+                  background: '#f5f5fa',
+                  borderRadius: 8
+                }}>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Created: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString()}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Created By: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Author?.Title)}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString()}</Text>
+                  </div>
+                  <div>
+                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified By: </Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Editor?.Title)}</Text>
+                  </div>
+                </div>
+              </Stack>
+            )}
           </Panel>
           <Dialog
             hidden={!dialogVisible}

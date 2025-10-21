@@ -7,7 +7,8 @@ import {
   DetailsList, IColumn,
   MessageBar, MessageBarType,
   Separator, Dropdown, IDropdownOption,
-  Panel, PanelType, SearchBox
+  Panel, PanelType, SearchBox, Label,
+  PrimaryButton, Selection,
 } from "office-ui-fabric-react";
 import { SPFI } from "@pnp/sp";
 // import { set } from "@microsoft/sp-lodash-subset";
@@ -97,7 +98,7 @@ function formatCommentHistory(jsonStr?: string): string {
       const user = entry.User || "";
       const role = entry.Role ? ` (${entry.Role})` : "";
       const data = entry.Data || entry.comment || "";
-      return `[${date} ${time}]${user}${role} \n${title}:${data}`;
+      return `[${date} ${time}]${user}${role} - ${title}: ${data}`;
     }).join("\n\n");
   } catch (err) {
     console.error("Failed to format comment history", err, jsonStr);
@@ -142,10 +143,20 @@ export default function BusinessView({
   const [selectedBusiness, setSelectedBusiness] = useState<string>("__all__");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
   const [selectedCurrentStatusFilter, setSelectedCurrentStatusFilter] = useState<string | null>(null);
-  const [filteredTeamSet, setFilteredTeamSet] = useState<Set<string>>(new Set());
-  const [filteredDepartmentSet, setFilteredDepartmentSet] = useState<Set<string>>(new Set());
-  const [filteredBusinessUnitSet, setFilteredBusinessUnitSet] = useState<Set<string>>(new Set());
-  const [filteredBusinessSet, setFilteredBusinessSet] = useState<Set<string>>(new Set());
+  // const [filteredTeamSet, setFilteredTeamSet] = useState<Set<string>>(new Set());
+  // const [filteredDepartmentSet, setFilteredDepartmentSet] = useState<Set<string>>(new Set());
+  // const [filteredBusinessUnitSet, setFilteredBusinessUnitSet] = useState<Set<string>>(new Set());
+  // const [filteredBusinessSet, setFilteredBusinessSet] = useState<Set<string>>(new Set());
+  const [selectedPOItemTitle, setSelectedPOItemTitle] = useState<string | null>(null);
+  // At the top of your component, add these hooks:
+  const [businessOptions, setBusinessOptions] = useState<IDropdownOption[]>([]);
+  const [businessUnitOptions, setBusinessUnitOptions] = useState<IDropdownOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<IDropdownOption[]>([]);
+  const [teamOptions, setTeamOptions] = useState<IDropdownOption[]>([]);
+  const [, setProjectToBusinessMap] = useState<{ [project: string]: string }>({});
+  const [, setProjectToBusinessUnitMap] = useState<{ [project: string]: string }>({});
+  const [, setProjectToDepartmentMap] = useState<{ [project: string]: string }>({});
+
 
   // Panel Columns for PO Items table
   const poItemColumns: IColumn[] = [
@@ -347,39 +358,90 @@ export default function BusinessView({
           allowedTeamsForUser = [];
         }
 
-        const classified = allTCC.reduce((acc: any, row: any) => {
-          const title = row.Title;
-          if (!title) return acc;
-          if (row.Business === title) {
-            acc.business.add(title);
-          } else if (row.BusinessUnit === title) {
-            acc.businessUnit.add(title);
-          } else if (row.Department === title) {
-            acc.department.add(title);
-          } else {
-            acc.team.add(title);
-          }
-          return acc;
-        }, { team: new Set<string>(), department: new Set<string>(), businessUnit: new Set<string>(), business: new Set<string>() });
+        // const classified = allTCC.reduce((acc: any, row: any) => {
+        //   const title = row.Title;
+        //   if (!title) return acc;
+        //   if (row.Business === title) {
+        //     acc.business.add(title);
+        //   } else if (row.BusinessUnit === title) {
+        //     acc.businessUnit.add(title);
+        //   } else if (row.Department === title) {
+        //     acc.department.add(title);
+        //   } else {
+        //     acc.team.add(title);
+        //   }
+        //   return acc;
+        // }, { team: new Set<string>(), department: new Set<string>(), businessUnit: new Set<string>(), business: new Set<string>() });
 
-        const filteredTeamSet = new Set<string>(
-          Array.from(classified.team).filter(team => allowedTeamsForUser.includes(team as string)) as string[]
-        );
-        const filteredDepartmentSet = new Set<string>(
-          Array.from(classified.department).filter(dept => allowedTeamsForUser.includes(dept as string)) as string[]
-        );
-        const filteredBusinessUnitSet = new Set<string>(
-          Array.from(classified.businessUnit).filter(bu => allowedTeamsForUser.includes(bu as string)) as string[]
-        );
-        const filteredBusinessSet = new Set<string>(
-          Array.from(classified.business).filter(biz => allowedTeamsForUser.includes(biz as string)) as string[]
-        );
+        // const filteredTeamSet = new Set<string>(
+        //   Array.from(classified.team).filter(team => allowedTeamsForUser.includes(team as string)) as string[]
+        // );
+        // const filteredDepartmentSet = new Set<string>(
+        //   Array.from(classified.department).filter(dept => allowedTeamsForUser.includes(dept as string)) as string[]
+        // );
+        // const filteredBusinessUnitSet = new Set<string>(
+        //   Array.from(classified.businessUnit).filter(bu => allowedTeamsForUser.includes(bu as string)) as string[]
+        // );
+        // const filteredBusinessSet = new Set<string>(
+        //   Array.from(classified.business).filter(biz => allowedTeamsForUser.includes(biz as string)) as string[]
+        // );
 
-        setFilteredTeamSet(filteredTeamSet);
-        setFilteredDepartmentSet(filteredDepartmentSet);
-        setFilteredBusinessUnitSet(filteredBusinessUnitSet);
-        setFilteredBusinessSet(filteredBusinessSet);
-        console.log("Allowed Teams for User:", allowedTeamsForUser);
+        // setFilteredTeamSet(filteredTeamSet);
+        // setFilteredDepartmentSet(filteredDepartmentSet);
+        // setFilteredBusinessUnitSet(filteredBusinessUnitSet);
+        // setFilteredBusinessSet(filteredBusinessSet);
+        // console.log("Allowed Teams for User:", allowedTeamsForUser);
+        // setAllowedTeams(Array.from(new Set(allowedTeamsForUser)));
+        const filteredTCCByAllowed = allTCC.filter(row => allowedTeamsForUser.includes(row.Title));
+
+        const businessSet = new Set<string>();
+        const businessUnitSet = new Set<string>();
+        const departmentSet = new Set<string>();
+        const teamSet = new Set<string>();
+
+        filteredTCCByAllowed.forEach(row => {
+          if (row.Business) businessSet.add(row.Business);
+          if (row.BusinessUnit) businessUnitSet.add(row.BusinessUnit);
+          if (row.Department) departmentSet.add(row.Department);
+          if (row.Title) teamSet.add(row.Title);
+        });
+
+        // Map projects to their Business, Business Unit, Department through PM team
+        const projectToBusinessMap: { [project: string]: string } = {};
+        const projectToBusinessUnitMap: { [project: string]: string } = {};
+        const projectToDepartmentMap: { [project: string]: string } = {};
+
+        filteredTCCByAllowed.forEach(row => {
+          Object.entries(projectTeamMap).forEach(([projectTitle, team]) => {
+            if (team === row.Title) {
+              projectToBusinessMap[projectTitle] = row.Business || "";
+              projectToBusinessUnitMap[projectTitle] = row.BusinessUnit || "";
+              projectToDepartmentMap[projectTitle] = row.Department || "";
+            }
+          });
+        });
+
+        setBusinessOptions(
+          [{ key: "__all__", text: "All" }, ...Array.from(businessSet).map(b => ({ key: b, text: b }))]
+        );
+        setBusinessUnitOptions(
+          [{ key: "__all__", text: "All" }, ...Array.from(businessUnitSet).map(bu => ({ key: bu, text: bu }))]
+        );
+        setDepartmentOptions(
+          [{ key: "__all__", text: "All" }, ...Array.from(departmentSet).map(dep => ({ key: dep, text: dep }))]
+        );
+        setTeamOptions(
+          [{ key: "__all__", text: "All" }, ...Array.from(teamSet).map(dep => ({ key: dep, text: dep }))]
+        )
+        setProjectToBusinessMap(projectToBusinessMap);
+        setProjectToBusinessUnitMap(projectToBusinessMap);
+        setProjectToDepartmentMap(projectToDepartmentMap);
+
+        console.log(projectToBusinessMap);
+        console.log(projectToBusinessMap);
+        console.log(projectToDepartmentMap);
+
+        // Also set dropdown options for teams using allowedTeamsForUser as before
         setAllowedTeams(Array.from(new Set(allowedTeamsForUser)));
       } catch (err) {
         console.error("Error loading projects and roles", err);
@@ -392,23 +454,6 @@ export default function BusinessView({
       loadProjectsAndTeams();
     }
   }, [userGroups, currentUser, projectsp]);
-
-
-  const teamOptions: IDropdownOption[] =
-    [{ key: 'all', text: 'All' }]
-      .concat(Array.from(filteredTeamSet).map(team => ({ key: String(team), text: String(team) })));
-
-  const departmentOptions: IDropdownOption[] =
-    [{ key: 'all', text: 'All' }]
-      .concat(Array.from(filteredDepartmentSet).map(dept => ({ key: String(dept), text: String(dept) })));
-
-  const businessUnitOptions: IDropdownOption[] =
-    [{ key: 'all', text: 'All' }]
-      .concat(Array.from(filteredBusinessUnitSet).map(bu => ({ key: String(bu), text: String(bu) })));
-
-  const businessOptions: IDropdownOption[] =
-    [{ key: 'all', text: 'All' }]
-      .concat(Array.from(filteredBusinessSet).map(biz => ({ key: String(biz), text: String(biz) })));
 
   useEffect(() => {
     async function loadProjects() {
@@ -485,6 +530,18 @@ export default function BusinessView({
     loadData();
   }, [sp]);
 
+  const poItemSelection = React.useRef(new Selection({
+    onSelectionChanged: () => {
+      const selectedItems = poItemSelection.current.getSelection();
+      if (selectedItems.length === 0) {
+        setSelectedStatusFilter(null);
+        setSelectedCurrentStatusFilter(null);
+        setSelectedPOItemTitle(null);
+      } else {
+        setSelectedPOItemTitle((selectedItems[0] as POItem).POItem_x0020_Title);
+      }
+    }
+  }));
   // Memoized filtered projects based on allowed teams
   const filteredProjectsByTeam = React.useMemo(() => {
     if (allowedTeams === null) return [];
@@ -598,17 +655,20 @@ export default function BusinessView({
     const visiblePOIDs = new Set(filteredPoSummary.map(po => po.POID));
 
     let filtered = reqList.filter(req => req.PurchaseOrder && visiblePOIDs.has(req.PurchaseOrder));
-
-    if (selectedStatusFilter) {
-      filtered = filtered.filter(req => (req.Status ?? "Unknown") === selectedStatusFilter);
-    }
-
     if (selectedCurrentStatusFilter) {
       filtered = filtered.filter(req => (req.CurrentStatus ?? "Unknown") === selectedCurrentStatusFilter);
     }
 
+    if (selectedPOItemTitle) {
+      filtered = filtered.filter(req => req.POItemx0020Title === selectedPOItemTitle);
+    }
     return filtered;
   }, [filteredPoSummary, reqList, selectedStatusFilter, selectedCurrentStatusFilter]);
+
+  const filteredInvoiceRequestsPanel = selectedPOItemTitle
+    ? poPanel.invoiceRequests.filter(req => req.POItem_x0020_Title === selectedPOItemTitle)
+    : poPanel.invoiceRequests;
+
 
   const filteredStatusMap = React.useMemo(() => {
     const statusCounts: { [status: string]: number } = {};
@@ -628,6 +688,110 @@ export default function BusinessView({
     return currentStatusCounts;
   }, [filteredInvoiceRequests]);
 
+  // useEffect(() => {
+  //   if (filteredPoSummaryWithStatusFilter && filteredPoSummaryWithStatusFilter.length > 0) {
+  //     loadFilterDropdownOptions();
+  //   }
+  // }, [filteredPoSummaryWithStatusFilter]);
+
+  // async function loadFilterDropdownOptions() {
+  //   // 1. Extract project names from filteredPoSummaryWithStatusFilter
+  //   const projectNames = filteredPoSummaryWithStatusFilter.map(p => p.ProjectName).filter(Boolean);
+
+  //   // 2. Fetch projects from SharePoint, filtered by project names
+  //   const projects = await projectsp.web.lists.getByTitle("Projects").items
+  //     // .filter(`Title in (${projectNames})`)
+  //     .select("Id", "Title", "PM/EMail")
+  //     .expand("PM")
+  //     .top(4999)();
+
+  //   console.log("Projects fetched for dropdown:", projects.length);
+
+  //   // 2. Get employees with MailID and Costcenter lookup
+  //   const employees = await projectsp.web.lists.getByTitle("Employees").items
+  //     .select("MailID", "CostCenter/Id", "CostCenter/Title")
+  //     .expand("CostCenter")
+  //     .top(4999)();
+
+  //   const teamCostCenters = await projectsp.web.lists.getByTitle("Team Cost Center").items
+  //     .select("Title", "CostCenter", "Business", "Department", "BusinessUnit")
+  //     .top(4999)();
+
+  //   const matchedProjects = projects.filter(proj =>
+  //     projectNames.includes(proj.Title)
+  //   );
+
+  //   const pmEmailsSet = new Set(
+  //     matchedProjects
+  //       .map(proj => proj.PM?.EMail?.toLowerCase())
+  //       .filter(email => !!email)
+  //   );
+  //   const matchedEmployees = employees.filter(emp =>
+  //     emp.MailID && pmEmailsSet.has(emp.MailID.toLowerCase())
+  //   );
+
+  //   const matchedCostCenters = matchedEmployees
+  //     .map(emp => emp.CostCenter)
+  //     .filter(cc => cc !== undefined && cc !== null);
+
+  //   const matchedCostCenterTitles = new Set(matchedCostCenters.map(cc => cc.Title));
+
+  //   const matchedTeamCostCenters = teamCostCenters.filter(tc =>
+  //     matchedCostCenterTitles.has(tc.Title)
+  //   );
+
+  //   // Extract arrays of each property
+  //   const teamTitles = matchedTeamCostCenters.map(tc => tc.Title);
+  //   const businesses = matchedTeamCostCenters.map(tc => tc.Business);
+  //   const businessUnits = matchedTeamCostCenters.map(tc => tc.BusinessUnit);
+  //   const departments = matchedTeamCostCenters.map(tc => tc.Department);
+
+  //   console.log(teamTitles)
+  //   console.log(businesses)
+  //   console.log(businessUnits)
+  //   console.log(departments)
+
+  //   // Map to dropdown options
+  //   const dropdownOptions = matchedTeamCostCenters.map(tc => ({
+  //     key: tc.Title,
+  //     team: tc.Title,
+  //     department: tc.Department,
+  //     business: tc.Business,
+  //     businessUnit: tc.BusinessUnit
+  //   }));
+
+  //   console.log(dropdownOptions);
+
+  //   const teamSet = new Set<string>();
+  //   const businessSet = new Set<string>();
+  //   const departmentSet = new Set<string>();
+  //   const businessUnitSet = new Set<string>();
+
+  //   dropdownOptions.forEach(option => {
+  //     if (option.team) teamSet.add(option.team);
+  //     if (option.business) businessSet.add(option.business);
+  //     if (option.department) departmentSet.add(option.department);
+  //     if (option.businessUnit) businessUnitSet.add(option.businessUnit);
+  //   });
+
+  //   // Create dropdown options arrays with "All" option at front
+  //   const teamDropdownOptions = [{ key: "all", text: "All" }, ...Array.from(teamSet).map(t => ({ key: t, text: t }))];
+  //   const businessDropdownOptions = [{ key: "all", text: "All" }, ...Array.from(businessSet).map(b => ({ key: b, text: b }))];
+  //   const departmentDropdownOptions = [{ key: "all", text: "All" }, ...Array.from(departmentSet).map(d => ({ key: d, text: d }))];
+  //   const businessUnitDropdownOptions = [{ key: "all", text: "All" }, ...Array.from(businessUnitSet).map(bu => ({ key: bu, text: bu }))];
+
+  //   // Call your setter functions to update dropdown states
+  //   setTeamOptions(teamDropdownOptions);
+  //   setBusinessOptions(businessDropdownOptions);
+  //   setDepartmentOptions(departmentDropdownOptions);
+  //   setBusinessUnitOptions(businessUnitDropdownOptions);
+
+  //   console.log("Team Options:", teamDropdownOptions);
+  //   console.log("Business Options:", businessDropdownOptions);
+  //   console.log("Department Options:", departmentDropdownOptions);
+  //   console.log("Business Unit Options:", businessUnitDropdownOptions);
+
+  // }
   // PO details screen open handler
   function openInvoiceRequestPanel(request: InvoiceRequest) {
     setInvoiceRequestPanel({ open: true, invoiceRequest: request });
@@ -682,21 +846,29 @@ export default function BusinessView({
     setTeams(options);
   }, [projectsInDetailList, projectToTeamMap]);
 
+  function decodeHtml(html: string): string {
+    const txt = document.createElement("textarea");
+    txt.innerHTML = html;
+    return txt.value;
+  }
   // Get PO items function
   function getPOItems(po: InvoicePO, allPOs: InvoicePO[]): POItem[] {
     if (po.LineItemsJSON) {
       try {
-        const items = JSON.parse(po.LineItemsJSON);
-        if (Array.isArray(items)) {
-          return items.map((item: any) => ({
-            POItem_x0020_Title: item.POItem_x0020_Title || item.Title || "-",
-            POItem_x0020_Value: +item.POItem_x0020_Value || +item.Value || 0,
-            POComments: item.POComments || item.Comments || "",
+        const items = decodeHtml(po.LineItemsJSON);
+        const decoded = JSON.parse(items);
+
+        if (Array.isArray(decoded)) {
+          return decoded.map((li: any, idx: number) => ({
+            Id: po.POID,
+            POItem_x0020_Title: li.Title || `LineItem${idx + 1}`,
+            POItem_x0020_Value: li.Value || "0",
+            POComments: li.Comments,
             Currency: po.Currency,
           }));
         }
       } catch {
-        // Ignore parse errors, fallback empty array
+
       }
     }
     // Check for child POs
@@ -709,13 +881,6 @@ export default function BusinessView({
         Currency: child.Currency || po.Currency,
       }));
     }
-    // Single PO item fallback
-    return [{
-      POItem_x0020_Title: po.POID,
-      POItem_x0020_Value: po.POAmount || 0,
-      POComments: "",
-      Currency: po.Currency,
-    }];
   }
 
   // PO panel open handler
@@ -802,40 +967,55 @@ export default function BusinessView({
             styles={{ root: { maxWidth: 300 } }}
           />
         </div> */}
-        <SearchBox
-          placeholder="Search projects"
-          value={searchText}
-          onChange={(_, newValue) => setSearchText(newValue ?? "")}
-          styles={{ root: { width: 300 } }}
-        />
-        <Dropdown
-          placeholder="Team"
-          options={teamOptions}
-          selectedKey={selectedTeam}
-          onChange={(_, option) => setSelectedTeam(option?.key as string || "all")}
-          styles={{ root: { width: 150 } }}
-        />
-        <Dropdown
-          placeholder="Department"
-          options={departmentOptions}
-          selectedKey={selectedDepartment}
-          onChange={(_, option) => setSelectedDepartment(option?.key as string || "all")}
-          styles={{ root: { width: 150 } }}
-        />
-        <Dropdown
-          placeholder="Business Unit"
-          options={businessUnitOptions}
-          selectedKey={selectedBusinessUnit}
-          onChange={(_, option) => setSelectedBusinessUnit(option?.key as string || "all")}
-          styles={{ root: { width: 150 } }}
-        />
-        <Dropdown
-          placeholder="Business"
-          options={businessOptions}
-          selectedKey={selectedBusiness}
-          onChange={(_, option) => setSelectedBusiness(option?.key as string || "all")}
-          styles={{ root: { width: 150 } }}
-        />
+        <div>
+          <Label>Search</Label>
+          <SearchBox
+            placeholder="Search"
+            value={searchText}
+            onChange={(_, newValue) => setSearchText(newValue ?? "")}
+            styles={{ root: { width: 300 } }}
+          />
+        </div>
+        <div>
+          <Dropdown
+            label="Business"
+            placeholder="Business"
+            options={businessOptions}
+            selectedKey={selectedBusiness}
+            onChange={(_, option) => setSelectedBusiness(option?.key as string || "all")}
+            styles={{ root: { width: 150 } }}
+          />
+        </div>
+        <div>
+          <Dropdown
+            label="Business Unit"
+            placeholder="Business Unit"
+            options={businessUnitOptions}
+            selectedKey={selectedBusinessUnit}
+            onChange={(_, option) => setSelectedBusinessUnit(option?.key as string || "all")}
+            styles={{ root: { width: 150 } }}
+          />
+        </div>
+        <div>
+          <Dropdown
+            label="Department"
+            placeholder="Department"
+            options={departmentOptions}
+            selectedKey={selectedDepartment}
+            onChange={(_, option) => setSelectedDepartment(option?.key as string || "all")}
+            styles={{ root: { width: 150 } }}
+          />
+        </div>
+        <div>
+          <Dropdown
+            label="Team"
+            placeholder="Team"
+            options={teamOptions}
+            selectedKey={selectedTeam}
+            onChange={(_, option) => setSelectedTeam(option?.key as string || "all")}
+            styles={{ root: { width: 150 } }}
+          />
+        </div>
       </Stack>
       <Stack>
         <Text variant="large" styles={{ root: { fontWeight: 600, marginBottom: 6 } }}>
@@ -925,13 +1105,14 @@ export default function BusinessView({
       />
       <Panel
         isOpen={poPanel.open}
+        headerText="Purchase Order Summary"
         onDismiss={() =>
           setPoPanel({ open: false, po: null, poItems: [], invoiceRequests: [] })
         }
         closeButtonAriaLabel="Close"
         isLightDismiss
         type={PanelType.largeFixed}
-        styles={{ main: { maxWidth: 1000 } }}
+      // styles={{ main: { maxWidth: 1000 } }}
       >
         {poPanel.po && (
           <Stack
@@ -955,12 +1136,6 @@ export default function BusinessView({
                 borderLeft: `6px solid ${primaryColor}`,
               }}
             >
-              <Text
-                variant="xLarge"
-                styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 20 } }}
-              >
-                Purchase Order Summary
-              </Text>
               <div
                 style={{
                   display: 'grid',
@@ -1034,6 +1209,11 @@ export default function BusinessView({
                 <DetailsList
                   items={poPanel.poItems}
                   columns={poItemColumns}
+                  selectionMode={1}
+                  onActiveItemChanged={(item) => {
+                    setSelectedPOItemTitle(item.POItem_x0020_Title);
+                  }}
+                  selection={poItemSelection.current}
                   compact
                   isHeaderVisible
                   styles={{
@@ -1052,6 +1232,17 @@ export default function BusinessView({
 
             {/* --- Invoice Requests Table --- */}
             <Stack>
+              <div>
+                <PrimaryButton
+                  text="Show all Invoice requests"
+                  onClick={() => {
+                    setSelectedStatusFilter(null);
+                    setSelectedCurrentStatusFilter(null);
+                    setSelectedPOItemTitle(null);
+                  }}
+                 styles={{ root: { marginLeft: 24, backgroundColor: primaryColor } }}
+                />
+              </div>
               <Text
                 variant="large"
                 styles={{
@@ -1077,7 +1268,7 @@ export default function BusinessView({
               >
                 {poPanel.invoiceRequests.length > 0 ? (
                   <DetailsList
-                    items={poPanel.invoiceRequests}
+                    items={filteredInvoiceRequestsPanel}
                     columns={invoiceColumns}
                     compact
                     isHeaderVisible
@@ -1103,43 +1294,34 @@ export default function BusinessView({
           </Stack>
         )
         }
-      </Panel >
+        <Panel
+          isOpen={invoiceRequestPanel.open}
+          onDismiss={() => setInvoiceRequestPanel({ open: false, invoiceRequest: null })}
+          headerText={`Invoice Request Details:`}
+          closeButtonAriaLabel="Close"
+          isLightDismiss
+          type={PanelType.largeFixed}
+        // styles={{ main: { maxWidth: 620 } }}
+        >
+          {invoiceRequestPanel.invoiceRequest && (
+            <Stack tokens={{ childrenGap: 16 }} styles={{ root: { padding: 16, background: "#f4f9fc", borderRadius: 10 } }}>
 
-      <Panel
-        isOpen={invoiceRequestPanel.open}
-        onDismiss={() => setInvoiceRequestPanel({ open: false, invoiceRequest: null })}
-        headerText={`Invoice Request Details:`}
-        closeButtonAriaLabel="Close"
-        isLightDismiss
-        type={PanelType.medium}
-        styles={{ main: { maxWidth: 620 } }}
-      >
-        {invoiceRequestPanel.invoiceRequest && (
-          <Stack tokens={{ childrenGap: 16 }} styles={{ root: { padding: 16, background: "#f4f9fc", borderRadius: 10 } }}>
-
-            {/* Main Details Card */}
-            <div style={{
-              background: "#fff",
-              borderRadius: 8,
-              padding: "18px 22px",
-              marginBottom: 12,
-              boxShadow: "0 2px 8px #f2f2f7"
-            }}>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "155px 1fr",
-                rowGap: 14,
-                columnGap: 22
-              }}>
+              {/* Main Details Card */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "155px 1fr 155px 1fr",
+                  rowGap: 14,
+                  columnGap: 22,
+                }}
+              >
                 <div style={{ fontWeight: 600, color: primaryColor }}>Purchase Order:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.PurchaseOrder}</div>
-
                 <div style={{ fontWeight: 600, color: primaryColor }}>Project Name:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.ProjectName ?? "-"}</div>
 
                 <div style={{ fontWeight: 600, color: primaryColor }}>PO Item Title:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.POItem_x0020_Title ?? "-"}</div>
-
                 <div style={{ fontWeight: 600, color: primaryColor }}>PO Item Value:</div>
                 <div>
                   {getCurrencySymbol(invoiceRequestPanel.invoiceRequest.Currency)}
@@ -1151,124 +1333,132 @@ export default function BusinessView({
                   {getCurrencySymbol(invoiceRequestPanel.invoiceRequest.Currency)}
                   {invoiceRequestPanel.invoiceRequest.InvoiceAmount?.toLocaleString() ?? "-"}
                 </div>
-
                 <div style={{ fontWeight: 600, color: primaryColor }}>Invoice Status:</div>
                 <div>
-                  <span style={{
-                    fontWeight: 700,
-                    background: "#e5f1fa",
-                    color: primaryColor,
-                    borderRadius: 12,
-                    padding: "2px 14px",
-                    display: "inline-block"
-                  }}>
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      background: "#e5f1fa",
+                      color: primaryColor,
+                      borderRadius: 12,
+                      padding: "2px 14px",
+                      display: "inline-block",
+                    }}
+                  >
                     {invoiceRequestPanel.invoiceRequest.Status ?? "-"}
                   </span>
                 </div>
-
                 <div style={{ fontWeight: 600, color: primaryColor }}>Current Status:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.CurrentStatus ?? "-"}</div>
 
                 <div style={{ fontWeight: 600, color: primaryColor }}>Due Date:</div>
-                <div>{invoiceRequestPanel.invoiceRequest.DueDate ? new Date(invoiceRequestPanel.invoiceRequest.DueDate).toLocaleDateString() : "-"}</div>
-
+                <div>
+                  {invoiceRequestPanel.invoiceRequest.DueDate
+                    ? new Date(invoiceRequestPanel.invoiceRequest.DueDate).toLocaleDateString()
+                    : "-"}
+                </div>
                 <div style={{ fontWeight: 600, color: primaryColor }}>Created:</div>
-                <div>{invoiceRequestPanel.invoiceRequest.Created ? new Date(invoiceRequestPanel.invoiceRequest.Created).toLocaleDateString() : "-"}</div>
-
+                <div>
+                  {invoiceRequestPanel.invoiceRequest.Created
+                    ? new Date(invoiceRequestPanel.invoiceRequest.Created).toLocaleDateString()
+                    : "-"}
+                </div>
                 <div style={{ fontWeight: 600, color: primaryColor }}>Created By:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.Author?.Title ?? "-"}</div>
 
                 <div style={{ fontWeight: 600, color: primaryColor }}>Modified:</div>
-                <div>{invoiceRequestPanel.invoiceRequest.Modified ? new Date(invoiceRequestPanel.invoiceRequest.Modified).toLocaleDateString() : "-"}</div>
-
+                <div>
+                  {invoiceRequestPanel.invoiceRequest.Modified
+                    ? new Date(invoiceRequestPanel.invoiceRequest.Modified).toLocaleDateString()
+                    : "-"}
+                </div>
                 <div style={{ fontWeight: 600, color: primaryColor }}>Modified By:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.Editor?.Title ?? "-"}</div>
               </div>
-            </div>
 
-            <Separator />
-
-            {/* PM Comments Section */}
-            {invoiceRequestPanel.invoiceRequest.PMCommentsHistory && (
-              <div style={{
-                background: "#fcfcfd",
-                borderRadius: 7,
-                padding: 14,
-                marginBottom: 10,
-                border: "1px solid #edf3fa"
-              }}>
-                <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>PM Comments</Text>
-                <pre style={{
-                  whiteSpace: "pre-wrap",
-                  maxHeight: 160,
-                  overflowY: "auto",
-                  backgroundColor: "#f6f9fd",
-                  padding: 8,
-                  borderRadius: 5,
-                  fontFamily: "Segoe UI"
+              {/* PM Comments Section */}
+              {invoiceRequestPanel.invoiceRequest.PMCommentsHistory && (
+                <div style={{
+                  background: "#fcfcfd",
+                  borderRadius: 7,
+                  padding: 14,
+                  marginBottom: 10,
+                  border: "1px solid #edf3fa"
                 }}>
-                  {formatCommentHistory(invoiceRequestPanel.invoiceRequest.PMCommentsHistory)}
-                </pre>
-              </div>
-            )}
-
-            {/* Finance Comments Section */}
-            {invoiceRequestPanel.invoiceRequest.FinanceCommentsHistory && (
-              <div style={{
-                background: "#fcfcfd",
-                borderRadius: 7,
-                padding: 14,
-                marginBottom: 10,
-                border: "1px solid #edf3fa"
-              }}>
-                <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>Finance Comments</Text>
-                <pre style={{
-                  whiteSpace: "pre-wrap",
-                  maxHeight: 160,
-                  overflowY: "auto",
-                  backgroundColor: "#f6f9fd",
-                  padding: 8,
-                  borderRadius: 5,
-                  fontFamily: "Segoe UI"
-                }}>
-                  {formatCommentHistory(invoiceRequestPanel.invoiceRequest.FinanceCommentsHistory)}
-                </pre>
-              </div>
-            )}
-
-            {/* Attachments Section */}
-            <div style={{
-              background: "#fcfcfd",
-              borderRadius: 7,
-              padding: 14,
-              marginBottom: 2,
-              border: "1px solid #edf3fa"
-            }}>
-              <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>Attachments</Text>
-              {invoiceRequestPanel.invoiceRequest.AttachmentFiles && invoiceRequestPanel.invoiceRequest.AttachmentFiles.length > 0 ? (
-                <ul style={{ paddingLeft: 20, marginTop: 4 }}>
-                  {invoiceRequestPanel.invoiceRequest.AttachmentFiles.map((file: any) => (
-                    <li key={file.UniqueId} style={{ marginBottom: 7 }}>
-                      <a href={file.ServerRelativeUrl} target="_blank" rel="noopener noreferrer"
-                        style={{
-                          color: primaryColor,
-                          textDecoration: "underline",
-                          fontWeight: 500,
-                          fontSize: 15
-                        }}>
-                        {file.FileName}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <Text styles={{ root: { color: "#888", marginTop: 3 } }}>No attachments</Text>
+                  <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>Requestor Comments</Text>
+                  <pre style={{
+                    whiteSpace: "pre-wrap",
+                    maxHeight: 160,
+                    overflowY: "auto",
+                    backgroundColor: "#f6f9fd",
+                    padding: 8,
+                    borderRadius: 5,
+                    fontFamily: "Segoe UI"
+                  }}>
+                    {formatCommentHistory(invoiceRequestPanel.invoiceRequest.PMCommentsHistory)}
+                  </pre>
+                </div>
               )}
-            </div>
 
-          </Stack>
-        )}
-      </Panel>
+              {/* Finance Comments Section */}
+              {invoiceRequestPanel.invoiceRequest.FinanceCommentsHistory && (
+                <div style={{
+                  background: "#fcfcfd",
+                  borderRadius: 7,
+                  padding: 14,
+                  marginBottom: 10,
+                  border: "1px solid #edf3fa"
+                }}>
+                  <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>Finance Comments</Text>
+                  <pre style={{
+                    whiteSpace: "pre-wrap",
+                    maxHeight: 160,
+                    overflowY: "auto",
+                    backgroundColor: "#f6f9fd",
+                    padding: 8,
+                    borderRadius: 5,
+                    fontFamily: "Segoe UI"
+                  }}>
+                    {formatCommentHistory(invoiceRequestPanel.invoiceRequest.FinanceCommentsHistory)}
+                  </pre>
+                </div>
+              )}
+
+              {/* Attachments Section */}
+              <div style={{
+                background: "#fcfcfd",
+                borderRadius: 7,
+                padding: 14,
+                marginBottom: 2,
+                border: "1px solid #edf3fa"
+              }}>
+                <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor, marginBottom: 4 } }}>Attachments</Text>
+                {invoiceRequestPanel.invoiceRequest.AttachmentFiles && invoiceRequestPanel.invoiceRequest.AttachmentFiles.length > 0 ? (
+                  <ul style={{ paddingLeft: 20, marginTop: 4 }}>
+                    {invoiceRequestPanel.invoiceRequest.AttachmentFiles.map((file: any) => (
+                      <li key={file.UniqueId} style={{ marginBottom: 7 }}>
+                        <a href={file.ServerRelativeUrl} target="_blank" rel="noopener noreferrer"
+                          style={{
+                            color: primaryColor,
+                            textDecoration: "underline",
+                            fontWeight: 500,
+                            fontSize: 15
+                          }}>
+                          {file.FileName}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Text styles={{ root: { color: "#888", marginTop: 3 } }}>No attachments</Text>
+                )}
+              </div>
+
+            </Stack>
+          )}
+        </Panel>
+      </Panel >
+
 
     </Stack >
   );

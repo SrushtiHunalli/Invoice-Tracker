@@ -17,13 +17,55 @@ import { useState, useEffect } from "react";
 import { NormalPeoplePicker } from '@fluentui/react/lib/Pickers';
 
 const pageSettings = [
-  { label: "Hide Command Bar", stateVariable: "hideCommandBar", sharepointElement: ".ms-CommandBar", tooltip: "Hide/show the SharePoint command bar.", type: "toggle" },
-  { label: "Hide Comments Wrapper", stateVariable: "hideCommentsWrapper", sharepointElement: "#CommentsWrapper", tooltip: "Hide/show the comments section.", type: "toggle" },
-  { label: "Hide Page Title", stateVariable: "hidePageTitle", sharepointElement: "h1[data-automation-id='pageHeader']", tooltip: "Hide/show the page title on top.", type: "toggle" },
-  { label: "Hide SideApp Bar", stateVariable: "hideSideAppBar", sharepointElement: "#spLeftNav", tooltip: "Hide/show the side navigation panel.", type: "toggle" },
-  { label: "Hide Site Header", stateVariable: "hideSiteHeader", sharepointElement: "#spSiteHeader", tooltip: "Hide/show the main site header area.", type: "toggle" },
-  { label: "Hide Office365 Navbar", stateVariable: "hideO365BrandNavbar", sharepointElement: "#SuiteNavWrapper", tooltip: "Hide/show the O365 branding bar.", type: "toggle" },
-  { label: "Hide SharePoint Hub Navbar", stateVariable: "hideSharepointHubNavbar", sharepointElement: ".ms-HubNav", tooltip: "Hide/show SharePoint hub navigation.", type: "toggle" }
+  {
+    label: "Top Command Bar",
+    stateVariable: "hideCommandBar",
+    sharepointElement: "#spCommandBar",
+    sharepointElements: ["#spCommandBar"],
+    tooltip: "Hides the Command Bar (containing New, Share, Edit, etc...)"
+  },
+  {
+    label: "Side App Bar",
+    stateVariable: "hideSideAppBar",
+    sharepointElement: "#sp-appBar",
+    sharepointElements: ["#sp-appBar"],
+    tooltip: "Hides the SharePoint Side Navigation Bar"
+  },
+  {
+    label: "Page Title",
+    stateVariable: "hidePageTitle",
+    sharepointElement: "[id*='PageTitle']",
+    sharepointElements: ["[id*='PageTitle']"],
+    tooltip: "Hides the Page Title"
+  },
+  {
+    label: "Site Navigation Bar",
+    stateVariable: "hideSiteHeader",
+    sharepointElement: "#spSiteHeader",
+    sharepointElements: ["#spSiteHeader", "#spLeftNav"],
+    tooltip: "Hides the SharePoint Site Navigation Bar"
+  },
+  {
+    label: "Comments Section",
+    stateVariable: "hideCommentsWrapper",
+    sharepointElement: "#CommentsWrapper",
+    sharepointElements: ["#CommentsWrapper"],
+    tooltip: "Hides the Like/Comment Section"
+  },
+  {
+    label: "O365 Brand Navigation Bar",
+    stateVariable: "hideO365BrandNavbar",
+    sharepointElement: "#SuiteNavWrapper",
+    sharepointElements: ["#SuiteNavWrapper"],
+    tooltip: "Hides the O365 Navigation Bar"
+  },
+  {
+    label: "SharePoint Hub Navigation Bar",
+    stateVariable: "hideSharepointHubNavbar",
+    sharepointElement: ".ms-HubNav",
+    sharepointElements: [".ms-HubNav"],
+    tooltip: "Hides the SharePoint Hub Navigation"
+  },
 ];
 
 
@@ -166,10 +208,6 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate }) => {
     const updated = { ...settings, [key]: checked };
     setSettings(updated);
     if (onSettingsUpdate) onSettingsUpdate(updated);
-
-    // Immediate UI update handled by useEffect on settings
-
-    // Save updated config asynchronously
     try {
       setSavingConfig(true);
       const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();

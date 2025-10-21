@@ -72,7 +72,7 @@ function DashboardCard({
       <div style={{ fontSize: 19, fontWeight: 600, color: "#222", marginBottom: 2, textAlign: "center" }}>
         {label}
       </div>
-      <div style={{ fontSize: 32, fontWeight: 700, color: "#218838", margin: "6px 0 4px" }}>
+      <div style={{ fontSize: 32, fontWeight: 700, color: primaryColor, margin: "6px 0 4px" }}>
         {count}
       </div>
       <div
@@ -94,7 +94,7 @@ function DashboardCard({
 }
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
-export default function Home({ sp, context, onNavigate}: HomeProps) {
+export default function Home({ sp, context, onNavigate }: HomeProps) {
   // const theme = getTheme();
   const spTheme = (window as any).__themeState__?.theme;
   const primaryColor = spTheme?.themePrimary || "#0078d4";
@@ -119,8 +119,8 @@ export default function Home({ sp, context, onNavigate}: HomeProps) {
     function handleResize() {
       const width = window.innerWidth;
       if (width <= 500) {
-        setCardWidth(120);
-        setCardHeight(92);
+        setCardWidth(100);
+        setCardHeight(85);
         setCardPadding(8);
       } else if (width <= 750) {
         setCardWidth(150);
@@ -225,7 +225,7 @@ export default function Home({ sp, context, onNavigate}: HomeProps) {
     <div
       style={{
         width: "100%",
-        minHeight: "50%",
+        height: "100%",
         background: "linear-gradient(120deg,#f6f8fa 80%,#eaf2fc 100%)",
         display: "flex",
         flexDirection: "column",
@@ -236,8 +236,8 @@ export default function Home({ sp, context, onNavigate}: HomeProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))",
-          gap: 36,
+          gridTemplateColumns: window.innerWidth <= 500 ? "1fr" : `repeat(auto-fit, minmax(${cardWidth}px, 1fr))`,
+          gap: 30,
           justifyContent: "center",
           width: "100%",
           maxWidth: 1110,
@@ -318,7 +318,7 @@ export default function Home({ sp, context, onNavigate}: HomeProps) {
             transition: "background .17s,box-shadow .14s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#174fb6";
+            (e.currentTarget as HTMLElement).style.background = "#424242e9";
             (e.currentTarget as HTMLElement).style.boxShadow = `0 10px 34px ${primaryColor}33`;
           }}
           onMouseLeave={(e) => {
@@ -327,7 +327,7 @@ export default function Home({ sp, context, onNavigate}: HomeProps) {
           }}
         >
           <span style={{ marginRight: 12 }}>Create Invoice Request</span>
-          <Icon iconName="Forward" styles={{ root: { fontSize: 25, fontWeight: 700} }} />
+          <Icon iconName="Forward" styles={{ root: { fontSize: 25, fontWeight: 700 } }} />
         </div>
       )}
     </div>

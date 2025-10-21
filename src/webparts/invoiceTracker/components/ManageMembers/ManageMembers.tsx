@@ -109,7 +109,7 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
     render() {
         const { groups, selectedGroup, groupMembers, selectedUsersToAdd, isLoading } = this.state;
         
-        const allowedGroups = ["admin", "PM", "DM", "DH", "Finance"];
+        const allowedGroups = ["admin", "PM", "DM", "DH", "Finance","Business Manager","Business Unit Manager","Department Manager","Team Manager"];
         const filteredGroups = groups.filter(g => allowedGroups.includes(g.Title));
         const groupOptions = filteredGroups.map(g => ({ key: g.Title, text: g.Title }));
         const allGroupNames = filteredGroups.map(g => g.Title);
