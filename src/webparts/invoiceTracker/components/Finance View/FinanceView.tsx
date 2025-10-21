@@ -976,7 +976,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
           newFinanceStatus = "Pending";
           break;
         case "Invoice Raised":
-          newCurrentStatus = "Finance In Progress";
+          newCurrentStatus = "Pending Finance";
           newFinanceStatus = "Pending";
           break;
         default:
