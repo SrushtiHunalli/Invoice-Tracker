@@ -19,7 +19,6 @@ import {
   Text,
   ScrollablePane,
   IDetailsHeaderProps,
-  DetailsListLayoutMode,
   IRenderFunction,
   Sticky,
   StickyPositionType,
@@ -28,10 +27,11 @@ import {
   Separator,
   Dropdown,
   Label,
+  TooltipHost,
 } from "@fluentui/react";
 import { SPFI } from "@pnp/sp";
 import styles from "./CreateView.module.scss"
-
+import DocumentViewer from '../DocumentViewer';
 interface CreateViewProps {
   sp: SPFI;
   context: any;
@@ -105,6 +105,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   const [previewFileIdx, setPreviewFileIdx] = useState<number | null>(null);
   const [selection] = useState(() =>
     new Selection({
+
       onSelectionChanged: () => {
         const sel = selection.getSelection()[0];
         setSelectedItem(sel ? (sel as PurchaseOrderItem) : null);
@@ -142,11 +143,23 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     { key: "PartiallyInvoiced", text: "Partially Invoiced" },
     { key: "CompletelyInvoiced", text: "Completely Invoiced" },
   ];
-  // const invoicedAmount = invoiceRequests
-  //   .filter(ir => ir.PurchaseOrderPO === po.POID && ir.Status?.toLowerCase() === "payment recieved")
-  //   .reduce((sum, inv) => sum + (inv.Amount || 0), 0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string>('');
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
-  // const [selectedMainPO, setSelectedMainPO] = useState<PurchaseOrderItem | null>(null);
+  // Example function to open preview, call this on file click
+  const openPreview = (url: string, fileName: string) => {
+    setPreviewUrl(url);
+    setPreviewFileName(fileName);
+    setIsViewerOpen(true);
+  };
+
+  // Example function to close preview
+  const closePreview = () => {
+    setIsViewerOpen(false);
+    setPreviewUrl(null);
+    setPreviewFileName('');
+  };
   const isFilterApplied = !!filters.search || !!invoiceStatusFilter;
   const [invoiceFormState, setInvoiceFormState] = useState<InvoiceFormState>({
     POID: "",
@@ -404,16 +417,27 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
           return null; // Hide the add button in read-only mode
         }
         return remaining > 0 ? (
+          <TooltipHost content="Create Invoice Request" id="create-invoice-tooltip" calloutProps={{ gapSpace: 0 }} styles={{ root: { display: 'inline-block' } }}>
           <IconButton
             iconProps={{ iconName: "Add" }}
             ariaLabel="Create Invoice Request"
             // onClick={() => handleOpenInvoicePanel(item)}
             onClick={e => {
-              e.stopPropagation();  // Prevent DetailsList row click/selection
+              // e.stopPropagation();  // Prevent DetailsList row click/selection
+              // // childPOSelection.setAllSelected(false);         // clear any previous selection
+              // // childPOSelection.setKeySelected(item.Id.toString(), true, false); // select only the clicked row
+              // handleOpenInvoicePanel(item);
+              e.stopPropagation();                // Prevent bubbling to row
+              e.preventDefault();                 // Prevent default focus behavior
+              //childPOSelection.setAllSelected(false); // Clear any other selections
+              //childPOSelection.setKeySelected(item.Id.toString(), true, false); // Select only the clicked row
               handleOpenInvoicePanel(item);
             }}
+
+
             styles={{ root: { marginLeft: 8 } }}
           />
+          </TooltipHost>
         ) : null;
       },
     },
@@ -883,6 +907,14 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     loadInvoiceRequestsForPercent(relevantPoIds);
   }, [mainPOs]);
 
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = '[class*="contentContainer-"] { inset: unset !important; }';
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
+
+
   const handleOpenInvoicePanelSinglePO = async (poItem: PurchaseOrderItem, poAmount: string) => {
     setInvoicePanelPO(null);
     setIsInvoicePanelOpen(true);
@@ -915,9 +947,10 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
   };
   const handleChildPORowClick = (item?: ChildPOItem) => {
     if (item) {
+      console.log(item)
       setActivePOIDFilter(item.POID);
       setFilterMode('childPO');
-      childPOSelection.setKeySelected(item.Id.toString(), true, false);
+      // childPOSelection.setKeySelected(item.Id.toString(), true, false);
     }
   };
 
@@ -1356,7 +1389,9 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
     let addedItemId: number | null = null;
     try {
       if (invoiceAmountError || !invoiceFormState.InvoiceAmount) {
-        alert(invoiceAmountError || "Invoiced Amount is required.");
+        setDialogType('error');
+        setDialogMessage(invoiceAmountError || "Invoiced Amount is required.");
+        setDialogVisible(true);
         return;
       }
       const userRole = await getCurrentUserRole(context, selectedItem);
@@ -1564,14 +1599,17 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
       setInvoiceRequests(updatedInvoices);
       setInvoiceRequestsForPercent(updatedInvoices);
 
-      setIsInvoicePanelOpen(false);
+      // setIsInvoicePanelOpen(false);
       setInvoicePanelPO(null);
 
     } catch (error) {
       if (addedItemId !== null) {
         await sp.web.lists.getByTitle("Invoice Requests").items.getById(addedItemId).delete();
       }
-      alert("Error submitting invoice request: " + (error as any)?.message);
+      setDialogType('error');
+      setDialogMessage("Error submitting invoice request: " + (error as any)?.message);
+      setDialogVisible(true);
+      return;
     }
   };
   // Inside the CreateView component function, before return:
@@ -1587,7 +1625,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
 
   return (
     <section style={{ background: "#fff", borderRadius: 8, padding: 16 }}>
-      <div style={{ flexGrow: 1, overflowY: 'auto' }}>
+      <div>
         <h2 style={{ marginBottom: 20 }}>Create Invoice Request</h2>
         <Stack horizontal verticalAlign="end" tokens={{ childrenGap: 16 }} styles={{ root: { flexWrap: "nowrap", overflowX: "auto", paddingBottom: 8 } }}>
           <div>
@@ -1609,7 +1647,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 selection.setAllSelected(false);      // Remove selection from main list
                 setSelectedItem(null);                // Also clear selected main PO item in state
               }}
-            // styles={{ dropdown: { width: 250, marginBottom: 15 } }}
+              styles={{ root: { width: 250, minWidth: 250 } }}
             />
           </div>
           <div>
@@ -1646,7 +1684,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                     selectionMode={SelectionMode.single}
                     setKey="mainPOsList"
                     isHeaderVisible={true}
-                    layoutMode={DetailsListLayoutMode.justified}
+                    // layoutMode={DetailsListLayoutMode.justified}
                     selectionPreservedOnEmptyClick={true}
                     onRenderDetailsHeader={onRenderDetailsHeader}
                     onItemInvoked={handlePOIDDoubleClick}
@@ -1663,6 +1701,32 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             </div>
           </div>
         )}
+        <Dialog
+          hidden={!dialogVisible}
+          onDismiss={() => setDialogVisible(false)}
+          dialogContentProps={{
+            type: dialogType === "error" ? DialogType.largeHeader : DialogType.normal,
+            title: dialogType === "error" ? "Error" : "Success",
+            subText: dialogMessage,
+          }}
+          modalProps={{
+            isBlocking: true,
+          }}
+        >
+          <DialogFooter>
+            <PrimaryButton
+              onClick={() => {
+                setDialogVisible(false);
+                if (dialogType !== 'error') {
+                  setIsInvoicePanelOpen(false);
+                  setInvoicePanelPO(null);
+                }
+              }}
+              text="OK"
+              styles={{ root: { backgroundColor: primaryColor } }}
+            />
+          </DialogFooter>
+        </Dialog>
         <Panel
           isOpen={isPanelOpen}
           onDismiss={handlePanelDismiss}
@@ -1727,6 +1791,7 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                   selectionMode={SelectionMode.single}
                   setKey="childPOs"
                   onActiveItemChanged={handleChildPORowClick}
+                  // getKey={item => item.key}
                   styles={{
                     root: {
                       background: "#fff",
@@ -1919,23 +1984,29 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                       ) : (
                         uploadedFiles.map((file, idx) => (
                           <Stack horizontal key={file.name + idx} verticalAlign="center" styles={{ root: { marginBottom: 6 } }}>
-                            <span style={{ flex: 1, fontWeight: 520, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</span>
-                            <IconButton
-                              iconProps={{ iconName: "Cancel" }}
-                              title="Remove"
-                              ariaLabel={`Remove ${file.name}`}
-                              onClick={() => removeAttachment(idx)}
-                              styles={{ root: { height: 28, minWidth: 28, color: "#ba0808" } }}
-                            />
-                            <PrimaryButton
-                              text="Preview"
-                              onClick={() => setPreviewFileIdx(idx)}
-                              styles={{ root: { marginLeft: 10, minWidth: 60, height: 28, backgroundColor: primaryColor } }}
-                            />
+                            <span style={{ flex: 1, fontWeight: 520, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</span>
+                            <IconButton iconProps={{ iconName: 'Cancel' }} title="Remove" ariaLabel={`Remove ${file.name}`} onClick={() => removeAttachment(idx)} styles={{ root: { height: 28, minWidth: 28, color: '#ba0808' } }} />
+                            <PrimaryButton text="Preview" onClick={() => openPreview(URL.createObjectURL(file), file.name)} styles={{ root: { marginLeft: 10, minWidth: 60, height: 28, backgroundColor: primaryColor } }} />
                           </Stack>
                         ))
                       )}
                     </div>
+                    {isViewerOpen && (
+                      <Panel
+                        isOpen={isViewerOpen}
+                        onDismiss={closePreview}
+                        headerText={previewFileName || "Attachment Preview"}
+                        closeButtonAriaLabel="Close"
+                        type={PanelType.medium}
+                      >
+                        <DocumentViewer
+                          url={previewUrl ?? ''}
+                          fileName={previewFileName}
+                          isOpen={isViewerOpen}
+                          onDismiss={closePreview}
+                        />
+                      </Panel>
+                    )}
                   </Stack>
                 )}
               </Stack>
@@ -1983,11 +2054,11 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
-                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItemValue)}</Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(invoiceCurrency)}{renderValue(selectedInvoiceRequest.POItemValue)}</Text>
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
-                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Amount)}</Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(invoiceCurrency)}{renderValue(selectedInvoiceRequest.Amount)}</Text>
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
@@ -2064,24 +2135,6 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
             </Stack>
           )}
         </Panel>
-        <Dialog
-          hidden={!dialogVisible}
-          onDismiss={() => setDialogVisible(false)}
-          dialogContentProps={{
-            type: dialogType === "error" ? DialogType.largeHeader : DialogType.normal,
-            title: dialogType === "error" ? "Error" : "Success",
-            subText: dialogMessage,
-          }}
-          modalProps={{
-            isBlocking: false,
-          }}
-        >
-          <DialogFooter >
-            <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-              <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" styles={{ root: { backgroundColor: primaryColor } }} />
-            </div>
-          </DialogFooter>
-        </Dialog>
       </div>
     </section >
   );

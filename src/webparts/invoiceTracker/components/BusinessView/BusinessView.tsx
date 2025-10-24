@@ -18,7 +18,7 @@ interface BusinessViewProps {
   onNavigate?: (view: string) => void;
   projectsp: SPFI;
 }
-
+import DocumentViewer from "../DocumentViewer";
 interface InvoiceRequest {
   Id: number;
   PurchaseOrder: string;
@@ -143,19 +143,19 @@ export default function BusinessView({
   const [selectedBusiness, setSelectedBusiness] = useState<string>("__all__");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
   const [selectedCurrentStatusFilter, setSelectedCurrentStatusFilter] = useState<string | null>(null);
-  // const [filteredTeamSet, setFilteredTeamSet] = useState<Set<string>>(new Set());
-  // const [filteredDepartmentSet, setFilteredDepartmentSet] = useState<Set<string>>(new Set());
-  // const [filteredBusinessUnitSet, setFilteredBusinessUnitSet] = useState<Set<string>>(new Set());
-  // const [filteredBusinessSet, setFilteredBusinessSet] = useState<Set<string>>(new Set());
+  const [attachmentViewer, setAttachmentViewer] = useState<{ isOpen: boolean; url: string; fileName: string }>({
+    isOpen: false,
+    url: '',
+    fileName: '',
+  });
   const [selectedPOItemTitle, setSelectedPOItemTitle] = useState<string | null>(null);
-  // At the top of your component, add these hooks:
   const [businessOptions, setBusinessOptions] = useState<IDropdownOption[]>([]);
   const [businessUnitOptions, setBusinessUnitOptions] = useState<IDropdownOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<IDropdownOption[]>([]);
   const [teamOptions, setTeamOptions] = useState<IDropdownOption[]>([]);
-  const [, setProjectToBusinessMap] = useState<{ [project: string]: string }>({});
-  const [, setProjectToBusinessUnitMap] = useState<{ [project: string]: string }>({});
   const [, setProjectToDepartmentMap] = useState<{ [project: string]: string }>({});
+  const [projectToBusinessMap, setProjectToBusinessMap] = useState<{ [project: string]: string }>({});
+  const [projectToBusinessUnitMap, setProjectToBusinessUnitMap] = useState<{ [project: string]: string }>({});
 
 
   // Panel Columns for PO Items table
@@ -558,21 +558,51 @@ export default function BusinessView({
   // }, [allowedTeams]);
 
   // Apply department filter to filtered projects
-  const departmentFilteredProjects = React.useMemo(() => {
-    if (allowedTeams === null) return [];
+  // const departmentFilteredProjects = React.useMemo(() => {
+  //   if (allowedTeams === null) return [];
 
+  //   let projs = filteredProjectsByTeam;
+
+  //   if (selectedDepartment && selectedDepartment !== "__all__") {
+  //     projs = projs.filter(p => p.Department === selectedDepartment);
+  //   }
+
+  //   if (selectedTeam && selectedTeam !== "__all__") {
+  //     projs = projs.filter(p => projectToTeamMap[p.Title] === selectedTeam);
+  //   }
+
+  //   return projs;
+  // }, [filteredProjectsByTeam, selectedDepartment, selectedTeam, projectToTeamMap, allowedTeams]);
+
+  const departmentFilteredProjects = React.useMemo(() => {
+    if (!allowedTeams) return;
     let projs = filteredProjectsByTeam;
 
+    // Filter by Business if selected and not '__all__'
+    if (selectedBusiness && selectedBusiness !== "__all__")
+      projs = projs.filter(p => {
+        const business = projectToBusinessMap[p.Title];
+        return business === selectedBusiness;
+      });
+
+    if (selectedBusinessUnit && selectedBusinessUnit !== "__all__")
+      projs = projs.filter(p => {
+        const businessUnit = projectToBusinessUnitMap[p.Title];
+        return businessUnit === selectedBusinessUnit;
+      });
+
+    // Filter by Department if selected and not '__all__'
     if (selectedDepartment && selectedDepartment !== "__all__") {
       projs = projs.filter(p => p.Department === selectedDepartment);
     }
 
+    // Filter by Team if selected and not '__all__'
     if (selectedTeam && selectedTeam !== "__all__") {
       projs = projs.filter(p => projectToTeamMap[p.Title] === selectedTeam);
     }
 
     return projs;
-  }, [filteredProjectsByTeam, selectedDepartment, selectedTeam, projectToTeamMap, allowedTeams]);
+  }, [filteredProjectsByTeam, selectedBusiness, selectedBusinessUnit, selectedDepartment, selectedTeam, projectToBusinessMap, projectToBusinessUnitMap, projectToTeamMap]);
 
 
   const filteredPOList = React.useMemo(() => {
@@ -620,13 +650,64 @@ export default function BusinessView({
     return poSummary.filter(po => poMatchesSearch(po, searchText));
   }, [poSummary, searchText]);
 
+  // const filteredPoSummary = React.useMemo(() => {
+  //   if (allowedTeams === null) return [];
+  //   return searchFilteredPoSummary.filter(po => {
+  //     const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
+  //     return !!matchingProject;
+  //   }).filter(po => !po.ParentPOID);
+  // }, [searchFilteredPoSummary, departmentFilteredProjects, allowedTeams]);
+
   const filteredPoSummary = React.useMemo(() => {
-    if (allowedTeams === null) return [];
-    return searchFilteredPoSummary.filter(po => {
-      const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
-      return !!matchingProject;
-    }).filter(po => !po.ParentPOID);
+    console.log('Calculating filteredPoSummary memo');
+
+    if (allowedTeams === null) {
+      console.log('allowedTeams is null, returning empty array');
+      return [];
+    }
+
+    console.log('allowedTeams:', allowedTeams);
+    console.log('searchFilteredPoSummary length before filtering:', searchFilteredPoSummary.length);
+    console.log('departmentFilteredProjects length:', departmentFilteredProjects.length);
+
+    // const filteredByProject = searchFilteredPoSummary.filter(po => {
+    //   const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
+    //   const isMatch = !!matchingProject;
+    //   if (!isMatch) {
+    //     console.log(`PO with ProjectName "${po.ProjectName}" has no matching project`);
+    //   }
+    //   return isMatch;
+    // });
+
+    const filteredByProject = searchFilteredPoSummary.filter(po => {
+      const matchingProject = departmentFilteredProjects.find(p => {
+        console.log('Comparing:', { projectTitle: p.Title, poProjectName: po.ProjectName });
+        return p.Title === po.ProjectName;
+      });
+
+      const isMatch = !!matchingProject;
+      if (!isMatch) {
+        console.log(`PO with ProjectName "${po.ProjectName}" has no matching project`);
+      }
+      return isMatch;
+    });
+
+    console.log('After filtering by project, count:', filteredByProject.length);
+
+    const filteredByParentPOID = filteredByProject.filter(po => {
+      const hasNoParent = !po.ParentPOID;
+      if (!hasNoParent) {
+        console.log(`Excluding PO with ParentPOID: ${po.ParentPOID} for PO:`, po);
+      }
+      return hasNoParent;
+    });
+
+    console.log('Final filteredPoSummary count:', filteredByParentPOID.length);
+
+    return filteredByParentPOID;
+
   }, [searchFilteredPoSummary, departmentFilteredProjects, allowedTeams]);
+
 
   const filteredPoSummaryWithStatusFilter = React.useMemo(() => {
     if (!filteredPoSummary || filteredPoSummary.length === 0) return [];
@@ -1232,7 +1313,7 @@ export default function BusinessView({
 
             {/* --- Invoice Requests Table --- */}
             <Stack>
-              <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
                 <PrimaryButton
                   text="Show all Invoice requests"
                   onClick={() => {
@@ -1240,7 +1321,8 @@ export default function BusinessView({
                     setSelectedCurrentStatusFilter(null);
                     setSelectedPOItemTitle(null);
                   }}
-                 styles={{ root: { marginLeft: 24, backgroundColor: primaryColor } }}
+                  styles={{ root: { marginLeft: 24, backgroundColor: primaryColor } }}
+                  disabled={!selectedPOItemTitle}
                 />
               </div>
               <Text
@@ -1437,13 +1519,24 @@ export default function BusinessView({
                   <ul style={{ paddingLeft: 20, marginTop: 4 }}>
                     {invoiceRequestPanel.invoiceRequest.AttachmentFiles.map((file: any) => (
                       <li key={file.UniqueId} style={{ marginBottom: 7 }}>
-                        <a href={file.ServerRelativeUrl} target="_blank" rel="noopener noreferrer"
+                        <a
+                          href="#"
+                          onClick={e => {
+                            e.preventDefault();
+                            setAttachmentViewer({
+                              isOpen: true,
+                              url: file.ServerRelativeUrl,
+                              fileName: file.FileName,
+                            });
+                          }}
                           style={{
                             color: primaryColor,
-                            textDecoration: "underline",
+                            textDecoration: 'underline',
                             fontWeight: 500,
-                            fontSize: 15
-                          }}>
+                            fontSize: 15,
+                            cursor: 'pointer',
+                          }}
+                        >
                           {file.FileName}
                         </a>
                       </li>
@@ -1453,13 +1546,26 @@ export default function BusinessView({
                   <Text styles={{ root: { color: "#888", marginTop: 3 } }}>No attachments</Text>
                 )}
               </div>
-
+              <Panel
+                isOpen={attachmentViewer.isOpen}
+                onDismiss={() => setAttachmentViewer({ isOpen: false, url: '', fileName: '' })}
+                headerText="Attachment Preview"
+                type={PanelType.large}
+                closeButtonAriaLabel="Close"
+              >
+                <div style={{ height: "100%", width: "100%" }}>
+                <DocumentViewer
+                  url={attachmentViewer.url}
+                  fileName={attachmentViewer.fileName}
+                  isOpen={attachmentViewer.isOpen}
+                  onDismiss={() => setAttachmentViewer({ isOpen: false, url: '', fileName: '' })}
+                />
+                </div>
+              </Panel>
             </Stack>
           )}
         </Panel>
       </Panel >
-
-
     </Stack >
   );
 }

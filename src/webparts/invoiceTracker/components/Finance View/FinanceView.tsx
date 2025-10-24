@@ -22,7 +22,7 @@ import {
   DatePicker,
   IconButton,
   IDetailsHeaderProps,
-  DetailsListLayoutMode,
+  TooltipHost,
   IRenderFunction,
   Sticky,
   StickyPositionType,
@@ -356,7 +356,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
     setIsPanelOpen(false);
     setSelectedItem(null);
     if (dialogType === 'success') {
-      await fetchData(); // Refresh data
+      setTimeout(() => {
+        fetchData();
+      }, 400);
     }
   };
 
@@ -827,18 +829,19 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   //   if (!selectedItem) return;
   //   try {
   //     await sp.web.lists
-  //       .getByTitle('Invoice Requests')
+  //       .getByTitle("Invoice Requests")
   //       .items.getById(selectedItem.Id)
   //       .attachmentFiles.getByName(fileName)
   //       .delete();
-  //     // Reload attachments after delete
-  //     const updatedItem = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedItem.Id).expand('AttachmentFiles')();
+  //     // Reload attachment list after deletion
+  //     const updatedItem = await sp.web.lists.getByTitle("Invoice Requests").items.getById(selectedItem.Id).expand("AttachmentFiles")();
   //     setSelectedItem(updatedItem);
   //     loadFinanceAttachments(updatedItem);
   //   } catch (error) {
-  //     console.error('Failed to remove finance attachment', error);
+  //     console.error("Failed to remove finance attachment", error);
   //   }
   // }
+
 
   async function handleClarification() {
     if (!selectedItem) return;
@@ -911,12 +914,9 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAttachments(Array.from(e.target.files)); // attachments becomes File[]
+      setAttachments(prev => [...prev, ...Array.from(e.target.files)]);
     }
   };
-
-
-  // Save updated invoice request and upload finance attachments
 
   async function handleSave() {
     if (!selectedItem) return;
@@ -1057,7 +1057,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
             onChange={(_, v) => setFilters(f => ({ ...f, search: v || "" }))}
           />
         </Stack></Stack.Item>
-        <Stack.Item align="end"><Stack styles={{ root: { width: 140 } }}><Label>Current Status</Label>
+        <Stack.Item align="end"><Stack styles={{ root: { width: 170 } }}><Label>Current Status</Label>
           <Dropdown
             placeholder="Current Status"
             options={currentstatusOptions}
@@ -1065,7 +1065,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
             onChange={(_, option) => setFilters(f => ({ ...f, currentstatus: (option?.key ?? "").toString() }))}
           />
         </Stack></Stack.Item>
-        <Stack.Item align="end"><Stack styles={{ root: { width: 140 } }}><Label>Invoice Status</Label>
+        <Stack.Item align="end"><Stack styles={{ root: { width: 170 } }}><Label>Invoice Status</Label>
           <Dropdown
             placeholder="Invoice Status"
             options={statusOptions}
@@ -1117,7 +1117,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                     selectionMode={SelectionMode.single}
                     setKey="financeViewList"
                     styles={{ root: { backgroundColor: "#fff" } }}
-                    layoutMode={DetailsListLayoutMode.justified}
+                    // layoutMode={DetailsListLayoutMode.justified}
                     isHeaderVisible={true}
                     // onRenderRow={onRenderRow}
                     selectionPreservedOnEmptyClick={true}
@@ -1302,7 +1302,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                             onClick={() => {
                               setViewerFileUrl(att.url);
                               setViewerFileName(att.name);
-                              setIsViewerOpen(true);
+                              setIsDocPanelOpen(true);
                             }}
                           >
                             <span style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline' }}>{att.name}</span>
@@ -1375,53 +1375,62 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
 
                 {/* List of newly added finance attachments with preview and remove */}
                 {attachments.length > 0 && (
-                  <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                  // <ul style={{ maxHeight: 140, overflowY: 'auto', paddingLeft: 20 }}>
+                  //   {attachments.map((file, index) => (
+                  //     <li
+                  //       key={index}
+                  //       style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
+                  //     >
+                  //       <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
+                  //         onClick={() => {
+                  //           setViewerFileUrl(URL.createObjectURL(file));
+                  //           setViewerFileName(file.name);
+                  //           setIsViewerOpen(true);
+                  //         }}>
+                  //         {file.name}
+                  //       </span>
+                  //       <button onClick={(e) => {
+                  //         e.stopPropagation();
+                  //         const objectUrl = URL.createObjectURL(file);
+                  //         setViewerFileUrl(objectUrl);
+                  //         setViewerFileName(file.name);
+                  //         setIsDocPanelOpen(true);
+                  //       }}>
+                  //         Preview
+                  //       </button>
+                  //       <button
+                  //         onClick={e => {
+                  //           e.stopPropagation();
+                  //           setAttachments(prev => prev.filter((_, i) => i !== index));
+                  //         }}
+                  //         style={{
+                  //           marginLeft: 8,
+                  //           background: "transparent",
+                  //           border: "none",
+                  //           color: "#a4262c",
+                  //           cursor: "pointer",
+                  //           fontWeight: "bold"
+                  //         }}
+                  //         aria-label={`Remove ${file.name}`}
+                  //       >
+                  //         X
+                  //       </button>
+                  //     </li>
+                  //   ))}
+                  // </ul>
+                  <ul>
                     {attachments.map((file, index) => (
-                      <li
-                        key={index}
-                        style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
-                      >
-                        <span style={{ flexGrow: 1, color: '#0078d4', cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={() => {
-                            setViewerFileUrl(URL.createObjectURL(file));
-                            setViewerFileName(file.name);
-                            setIsViewerOpen(true);
-                          }}>
+                      <li key={index} className="attachmentRow">
+                        <span className="attachmentFileName" style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline', cursor: 'pointer' }}
+                          onClick={() => { setViewerFileUrl(URL.createObjectURL(file)); setViewerFileName(file.name); setIsViewerOpen(true); }}>
                           {file.name}
                         </span>
-                        <button onClick={(e) => {
-                          e.stopPropagation();
-                          const objectUrl = URL.createObjectURL(file);
-                          setViewerFileUrl(objectUrl);
-                          setViewerFileName(file.name);
-                          setIsDocPanelOpen(true);
-                        }}>
-                          Preview
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAttachments((prev) =>
-                              prev.filter((_, i) => i !== index)
-                            );
-                            if (viewerFileName === file.name) {
-                              setIsViewerOpen(false);
-                              setViewerFileUrl(null);
-                              setViewerFileName(null);
-                            }
-                          }}
-                          style={{
-                            marginLeft: 8,
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#a4262c',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                          }}
-                          aria-label={`Remove ${file.name}`}
-                        >
-                          ×
-                        </button>
+                        <div className="attachmentButtons" style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={e => { e.stopPropagation(); setViewerFileUrl(URL.createObjectURL(file)); setViewerFileName(file.name); setIsDocPanelOpen(true); }}>Preview</button>
+                          <TooltipHost content="Remove attachment" id="remove-attachment-tooltip" calloutProps={{ gapSpace: 0 }} styles={{ root: { display: 'inline-block' } }}>
+                            <button onClick={e => { e.stopPropagation(); setAttachments(prev => prev.filter((_, i) => i !== index)); }} style={{ background: 'transparent', border: 'none', color: '#a4262c', fontWeight: 'bold', cursor: 'pointer' }}>X</button>
+                          </TooltipHost>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -1478,16 +1487,18 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
               }}
             >
               <div style={{ flexGrow: 1, overflow: 'auto' }}>
-                <DocumentViewer
-                  url={viewerFileUrl || ''}
-                  isOpen={isDocPanelOpen}
-                  onDismiss={() => {
-                    setIsDocPanelOpen(false);
-                    setViewerFileUrl(null);
-                    setViewerFileName(null);
-                  }}
-                  fileName={viewerFileName || ''}
-                />
+                <div style={{ height: "100%", width: "100%" }}>
+                  <DocumentViewer
+                    url={viewerFileUrl || ''}
+                    isOpen={isDocPanelOpen}
+                    onDismiss={() => {
+                      setIsDocPanelOpen(false);
+                      setViewerFileUrl(null);
+                      setViewerFileName(null);
+                    }}
+                    fileName={viewerFileName || ''}
+                  />
+                </div>
               </div>
             </Stack>
           )}
@@ -1510,7 +1521,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
           </div>
         </DialogFooter>
       </Dialog>
-    </section>
+    </section >
 
   );
 }

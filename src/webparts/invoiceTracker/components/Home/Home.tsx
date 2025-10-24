@@ -4,7 +4,7 @@ import { Spinner } from "@fluentui/react/lib/Spinner";
 import { SPFI } from "@pnp/sp";
 import { spfi } from "@pnp/sp";
 import { SPFx } from "@pnp/sp/presets/all";
-import { Icon } from "@fluentui/react";
+import { Icon, Dialog, DialogType, DialogFooter, PrimaryButton } from "@fluentui/react";
 
 interface HomeProps {
   sp: SPFI;
@@ -19,7 +19,7 @@ function DashboardCard({
   ariaLabel,
   onClick,
   iconName,
-  // accentColor,
+
   cardWidth,
   cardHeight,
   cardPadding
@@ -29,7 +29,6 @@ function DashboardCard({
   ariaLabel: string;
   onClick: () => void;
   iconName: string;
-  // accentColor: primaryColor;
   cardWidth: number | string;
   cardHeight: number | string;
   cardPadding: number | string;
@@ -54,10 +53,12 @@ function DashboardCard({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        justifyContent: "flex-start",
         transition: "box-shadow .15s, transform .14s",
         outline: 0,
         border: "1.5px solid #eee",
         cursor: "pointer",
+        position: "relative",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px ${primaryColor}22`;
@@ -108,7 +109,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
   const [error, setError] = useState<string | null>(null);
   const [userGroups, setUserGroups] = useState<string[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
-
+  const [isAccessDeniedDialogVisible, setIsAccessDeniedDialogVisible] = React.useState(false);
   // Responsive card size states
   const [cardWidth, setCardWidth] = useState<number | string>(220);
   const [cardHeight, setCardHeight] = useState<number | string>(152);
@@ -218,7 +219,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
     };
     if (showAll || showPmOnly) onNavigate("myrequests", { initialFilters: filterMap[filterKey] });
     else if (showFinanceOnly) onNavigate("financeview", { initialFilters: filterMap[filterKey] });
-    else alert("Access denied");
+    setIsAccessDeniedDialogVisible(true);
   }
 
   return (
@@ -292,6 +293,22 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
             />
           </>
         )}
+        <Dialog
+          hidden={!isAccessDeniedDialogVisible}
+          onDismiss={() => setIsAccessDeniedDialogVisible(false)}
+          dialogContentProps={{
+            type: DialogType.normal,
+            title: "Access Denied",
+            subText: "You do not have permission to view this content.",
+          }}
+          modalProps={{
+            isBlocking: false,
+          }}
+        >
+          <DialogFooter>
+            <PrimaryButton onClick={() => setIsAccessDeniedDialogVisible(false)} text="OK" />
+          </DialogFooter>
+        </Dialog>
       </div>
       {(showAll || showPmOnly) && (
         <div

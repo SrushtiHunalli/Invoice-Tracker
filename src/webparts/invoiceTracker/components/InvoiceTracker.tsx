@@ -12,7 +12,7 @@ import ManageMembers from "./ManageMembers/ManageMembers";
 import styles from "./InvoiceTracker.module.scss";
 import Logo from "../assets/Logo.png";
 import BusinessView from "./BusinessView/BusinessView";
-
+import Help from "./Help/Help";
 export interface IInvoiceTrackerProps {
   description: string;
   isDarkTheme: boolean;
@@ -26,6 +26,7 @@ export interface IInvoiceTrackerProps {
   getCurrentPageUrl?: () => string;
   pageConfig?: Record<string, boolean>;
 }
+export const InvoiceTrackerContext: any = React.createContext(React.useContext);
 interface IInvoiceTrackerState {
   loading: boolean;
   progress: number;
@@ -142,19 +143,19 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     });
 
 
-    // const canvas = document.querySelector('.CanvasSection');
-    // if (canvas && canvas.parentElement) {
-    //   canvas.parentElement.style.width = "100%";
-    //   canvas.parentElement.style.minWidth = "100%";
-    //   canvas.parentElement.style.maxWidth = "100%";
-    //   canvas.parentElement.style.position = "fixed";
-    //   canvas.parentElement.style.top = "0"
-    //   canvas.parentElement.style.left = "0";
-    //   canvas.parentElement.style.height = "100%";
-    //   canvas.parentElement.style.zIndex = "1000";
-    //   canvas.parentElement.style.margin = "0";
-    //   canvas.parentElement.style.background = "#fff";
-    // }
+    const canvas = document.querySelector('.CanvasSection');
+    if (canvas && canvas.parentElement) {
+      canvas.parentElement.style.width = "100%";
+      canvas.parentElement.style.minWidth = "100%";
+      canvas.parentElement.style.maxWidth = "100%";
+      canvas.parentElement.style.position = "fixed";
+      canvas.parentElement.style.top = "0"
+      canvas.parentElement.style.left = "0";
+      canvas.parentElement.style.height = "100%";
+      canvas.parentElement.style.zIndex = "1000";
+      canvas.parentElement.style.margin = "0";
+      canvas.parentElement.style.background = "#fff";
+    }
 
     this.setState({ loading: true, progress: 10 });
     const roles = await this.getUserRoles();
@@ -163,7 +164,10 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     const isPM = roles.includes("PM") || roles.includes("Project Manager");
     const isDM = roles.includes("DM") || roles.includes("Delivery Manager");
     const isDH = roles.includes("DH") || roles.includes("Department Head");
-
+    const isBusinessM = roles.includes("Business");
+    const isBusinessUnitM = roles.includes("Business Unit");
+    const isDepartmentM = roles.includes("Department");
+    const isTeamM = roles.includes("Team");
     function decodeHtmlEntities(str: string): string {
       const txt = document.createElement('textarea');
       txt.innerHTML = str;
@@ -192,7 +196,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     this.updateProgress();
 
     // Use new role info to build nav links:
-    const navLinks = this.getNavLinks(isAdmin, isFinance, isPM, isDM, isDH, this.state.isNavCollapsed);
+    const navLinks = this.getNavLinks(isAdmin, isFinance, isPM, isDM, isDH, isBusinessM, isBusinessUnitM, isDepartmentM, isTeamM, this.state.isNavCollapsed);
     this.setState({ navLinks, loading: false, progress: 100 });
     this.updateProgress();
     await this.ensureGroups();
@@ -310,11 +314,21 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         await list.fields.addMultilineText("Value");
       }
     }
-    const value = { "hideCommandBar": true, "hideSideAppBar": true, "hidePageTitle": true, "hideSiteHeader": true, "hideCommentsWrapper": true, "hideO365BrandNavbar": true, "hideSharepointHubNavbar": true }
+    // const value = { "hideCommandBar": true, "hideSideAppBar": true, "hidePageTitle": true, "hideSiteHeader": true, "hideCommentsWrapper": true, "hideO365BrandNavbar": true, "hideSharepointHubNavbar": true }
+    const valueObj = {
+      hideCommandBar: true,
+      hideSideAppBar: true,
+      hidePageTitle: true,
+      hideSiteHeader: true,
+      hideCommentsWrapper: true,
+      hideO365BrandNavbar: true,
+      hideSharepointHubNavbar: true
+    };
 
+    const valueString = JSON.stringify(valueObj);
     await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
       Title: "PageConfig",
-      Value: value,
+      Value: valueString,
     })
     await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
       Title: "FinanceEmail",
@@ -433,11 +447,16 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     isPM: boolean,
     isDM: boolean,
     isDH: boolean,
+    isBusinessM: boolean,
+    isBusinessUnitM: boolean,
+    isDepartmentM: boolean,
+    isTeamM: boolean,
     navCollapsed: boolean
   ): INavLinkGroup[] {
     const links: INavLink[] = [];
 
     const isPMorDMorDH = isPM || isDM || isDH;
+    const isBuBUDepTeam = isBusinessM || isBusinessUnitM || isDepartmentM || isTeamM
 
     if (isPMorDMorDH || isFinance || isAdmin) {
       links.push({ key: "home", name: "Home", iconProps: { iconName: "Home" }, url: "" });
@@ -449,12 +468,15 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     if (isFinance || isAdmin) {
       links.push({ key: "updaterequests", name: "Update Invoice Request", iconProps: { iconName: "Money" }, url: "" });
     }
-    if (isPM || isDM || isDH || isAdmin) {
+    if (isBuBUDepTeam || isAdmin) {
       links.push({ key: "businessview", name: "Business View", iconProps: { iconName: "Financial" }, url: "" });
     }
     if (isAdmin) {
       links.push({ key: "settings", name: "Settings", iconProps: { iconName: "Settings" }, url: "" });
       links.push({ key: "managemembers", name: "Manage Members", iconProps: { iconName: "SecurityGroup" }, url: "" });
+    }
+    if (isPMorDMorDH || isFinance || isAdmin) {
+      links.push({ key: "help", name: "Help", iconProps: { iconName: "Help" }, url: "" });
     }
     if (navCollapsed) {
       return [{
@@ -564,6 +586,11 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     const isPM = userRoles.includes("PM") || userRoles.includes("Project Manager");
     const isDM = userRoles.includes("DM") || userRoles.includes("Delivery Manager");
     const isDH = userRoles.includes("DH") || userRoles.includes("Department Head");
+    const isBusinessM = userRoles.includes("Business");
+    const isBusinessUnitM = userRoles.includes("Business Unit");
+    const isDepartmentM = userRoles.includes("Department");
+    const isTeamM = userRoles.includes("Team");
+    const isBuBUDepTeam = isBusinessM || isBusinessUnitM || isDepartmentM || isTeamM
     const isPMorDMorDH = isPM || isDM || isDH;
 
     switch (selectedTab) {
@@ -584,7 +611,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           return <FinanceView sp={this.sp} projectsp={this.projectSp} context={this.props.context} initialFilters={this.state.filter} onNavigate={this.handleNavigate} />;
         break;
       case "businessview":
-        if (isPM || isDM || isDH || isAdminUser)
+        if (isBuBUDepTeam || isAdminUser)
           return <BusinessView sp={this.sp} projectsp={this.projectSp} context={this.props.context} onNavigate={this.handleNavigate} />;
         break;
       case "settings":
@@ -594,6 +621,11 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       case "managemembers":
         if (isAdminUser)
           return <ManageMembers context={this.props.context} />;
+        break;
+      case "help":
+        if (isPMorDMorDH || isFinance || isAdminUser) {
+          return <Help isOpen={true} onDismiss={() => this.setState({ selectedTab: "home" })} />;
+        }
         break;
       default:
         return <Dashboard />;
@@ -708,6 +740,10 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
                 this.state.userRoles.includes("PM") || this.state.userRoles.includes("Project Manager"),
                 this.state.userRoles.includes("DM") || this.state.userRoles.includes("Delivery Manager"),
                 this.state.userRoles.includes("DH") || this.state.userRoles.includes("Department Head"),
+                this.state.userRoles.includes("Business"),
+                this.state.userRoles.includes("Business Unit"),
+                this.state.userRoles.includes("Department"),
+                this.state.userRoles.includes("Team"),
                 this.state.isNavCollapsed
               )}
               // styles={{ root: { overflowY: "auto", flexGrow: 1, color: primaryColor } }}

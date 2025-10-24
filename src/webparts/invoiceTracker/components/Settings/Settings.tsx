@@ -11,6 +11,7 @@ import {
   MessageBarType,
   IBasePickerSuggestionsProps,
   IPersonaProps,
+  Dialog, DialogType, DialogFooter
 } from '@fluentui/react';
 import { SPFI, PrincipalType, PrincipalSource } from '@pnp/sp';
 import { useState, useEffect } from "react";
@@ -108,6 +109,9 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
       return acc;
     }, {} as Record<string, boolean>)
   );
+  const [isDialogVisible, setIsDialogVisible] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState('');
+
   // const [settings, setSettings] = useState<Record<string, boolean> | null>(null);
   const [loading, setLoading] = useState(true);
   // React.useEffect(() => {
@@ -151,17 +155,17 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
     loadPageSettings();
   }, [sp]);
 
-  // Apply page toggles on settings change
-  useEffect(() => {
-    pageSettings.forEach(ps => {
-      const hide = settings[ps.stateVariable];
-      const element = document.querySelector(ps.sharepointElement);
-      if (element instanceof HTMLElement) {
-        element.style.setProperty("display", hide ? "none" : "", "important");
-      }
-      toggleElement(ps.sharepointElement, settings[ps.stateVariable]);
-    });
-  }, [settings]);
+  // // Apply page toggles on settings change
+  // useEffect(() => {
+  //   pageSettings.forEach(ps => {
+  //     const hide = settings[ps.stateVariable];
+  //     const element = document.querySelector(ps.sharepointElement);
+  //     if (element instanceof HTMLElement) {
+  //       element.style.setProperty("display", hide ? "none" : "", "important");
+  //     }
+  //     toggleElement(ps.sharepointElement, settings[ps.stateVariable]);
+  //   });
+  // }, [settings]);
 
   // Load Finance Emails from InvoiceConfiguration list
   useEffect(() => {
@@ -222,7 +226,9 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
         await sp.web.lists.getByTitle(SETTINGS_LIST).items.getById(items[0].Id).update({ Value: emailsString });
       }
       setSavingConfig(false);
-      alert('Finance Emails saved successfully');
+      setDialogMessage('Finance Emails saved successfully');
+      setIsDialogVisible(true);
+
     } catch (e) {
       setError('Error saving emails');
       setSavingConfig(false);
@@ -319,6 +325,21 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
           </Stack>
         </PivotItem>
       </Pivot>
+      <Dialog
+        hidden={!isDialogVisible}
+        onDismiss={() => setIsDialogVisible(false)}
+        dialogContentProps={{
+          type: DialogType.normal,
+          title: 'Save Confirmation',
+          subText: dialogMessage,
+        }}
+        modalProps={{ isBlocking: false }}
+      >
+        <DialogFooter>
+          <PrimaryButton onClick={() => setIsDialogVisible(false)} text="OK" />
+        </DialogFooter>
+      </Dialog>
+
     </div>
   );
 };

@@ -28,7 +28,7 @@ import {
   Icon,
   IconButton,
   IDetailsHeaderProps,
-  DetailsListLayoutMode,
+  // DetailsListLayoutMode,
   IRenderFunction,
   Sticky,
   StickyPositionType,
@@ -508,6 +508,26 @@ function InvoiceDetailsCard({
                 >
                   {file.Name || file.FileName}
                 </a>
+                <IconButton
+                  iconProps={{ iconName: "Download" }}
+                  title="Download attachment"
+                  ariaLabel="Download attachment"
+                  onClick={() => {
+                    const absoluteUrl = file.ServerRelativeUrl.startsWith("http")
+                      ? file.ServerRelativeUrl
+                      : `${window.location.origin}${file.ServerRelativeUrl}`;
+                    const link = document.createElement("a");
+                    link.href = absoluteUrl;
+                    link.download = file.Name || file.FileName || "attachment";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  styles={{
+                    root: { marginLeft: 8, color: "#0078d4" },
+                    rootHovered: { background: "#f3f2f1" },
+                  }}
+                />
               </li>
             ))}
           </ul>
@@ -658,27 +678,38 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
   };
 
   const handleExportToExcel = (): void => {
-    // Copy your data to a JSON array in the format for export
-    const exportData = filteredInvoiceRequests.map(item => ({
-      Id: item.Id,
-      Title: item.Title,
-      Status: item.Status,
-      PurchaseOrder: item.PurchaseOrder,
-      ProjectName: item.ProjectName,
-      InvoiceAmount: item.InvoiceAmount,
-      POItemTitle: item.POItem_x0020_Title,
-      POItemValue: item.POItem_x0020_Value,
-      PMCommentsHistory: item.PMCommentsHistory,
-      FinanceCommentsHistory: item.PMCommentsHistory,
-      POAmount: item.POAmount,
-      Customer_x0020_Contact: item.Customer_x0020_Contact,
-      CurrentStatus: item.CurrentStatus,
-      DueDate: item.DueDate,
-      Currency: item.Currency,
-      AttachmentFiles: item.AttachmentFiles,
-      Created: item.Created,
-      Modified: item.Modified,
-    }))
+    const exportSource = sortedFilteredItems && sortedFilteredItems.length > 0
+      ? sortedFilteredItems
+      : filteredItems || invoiceRequests;
+
+    const exportData = exportSource.map((item) => {
+      const currencySymbol = getCurrencySymbol(item.Currency);
+      const invoicePercent = calculateInvoicedPercentForPO(item.PurchaseOrder, invoiceRequests).toFixed(0) + "%";
+      const poItemInvoicePercent = calculateInvoicedPercentForPOItem(
+        item.PurchaseOrder,
+        item.POItem_x0020_Title,
+        item.POItem_x0020_Value,
+        invoiceRequests
+      ).toFixed(0) + "%";
+      const createddate = new Date(item.Created).toLocaleDateString()
+      const modifieddate = new Date(item.Modified).toLocaleDateString()
+
+      return {
+        POID: item.PurchaseOrder,
+        Project: item.ProjectName,
+        CurrentStatus: item.CurrentStatus,
+        InvoiceStatus: item.Status,
+        POItemTitle: item.POItem_x0020_Title,
+        POItemValue: `${currencySymbol}${Number(item.POItem_x0020_Value || 0).toLocaleString()}`,
+        "Invoiced Amount": `${currencySymbol}${Number(item.InvoiceAmount || 0).toLocaleString()}`,
+        "Invoice %": invoicePercent,
+        "PO Item Invoice %": poItemInvoicePercent,
+        Created: createddate,
+        "Created By": item.Author?.Title,
+        Modified: modifieddate,
+        "Modified By": item.Editor?.Title,
+      };
+    });
 
     // Convert JSON to worksheet
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -1063,7 +1094,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
           if (invoice) {
             setSelectedReq(invoice);
             setShowHierPanel(true);
-            // --- New logic for hierarchy ---
             const mainPO = findMainPO(invoice, invoicePOs);
             if (mainPO) {
               const hierarchy = getHierarchyForPO(mainPO, invoicePOs, invoiceRequests);
@@ -1076,12 +1106,12 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     loadSelectedInvoiceAndHierarchy();
   }, [initialFilters, invoicePOs, invoiceRequests]);
 
-  // useEffect(() => {
-  //   const style = document.createElement('style');
-  //   style.innerHTML = '[class*="contentContainer-"] { inset: unset !important; }';
-  //   document.head.appendChild(style);
-  //   return () => { document.head.removeChild(style); };
-  // }, []);
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = '[class*="contentContainer-"] { inset: unset !important; }';
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
 
 
   const filteredItems = React.useMemo(() => {
@@ -1176,9 +1206,11 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
           "Created",
           "Author/Title",
           "Modified",
-          "Editor/Title"
+          "Editor/Title",
+          "CurrentStatus",
+          "AttachmentFiles"
         )
-        .expand("Author", "Editor")();
+        .expand("Author", "Editor", "AttachmentFiles")();
 
       return {
         Id: item.Id,
@@ -1196,7 +1228,10 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
         Created: item.Created,
         Author: item.Author?.Title || "",
         Modified: item.Modified,
-        Editor: item.Editor?.Title || ""
+        Editor: item.Editor?.Title || "",
+        CurrentStatus: item.CurrentStatus,  
+        AttachmentFiles: item.AttachmentFiles,
+        InvoiceAmount: item.InvoiceAmount,
       };
 
     } catch (error) {
@@ -1255,49 +1290,62 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     setClarifyLoading(true);
 
     try {
-
+      // Fetch the item
       const item = await sp.web.lists.getByTitle('Invoice Requests').items.getById(selectedReq.Id).select('PMCommentsHistory')();
-
       let history = [];
-      // if (item.PMCommentsHistory) {
-      //   try {
-      //     history = JSON.parse(formatCommentsHistory(item.PMCommentsHistory));
-      //     if (!Array.isArray(history)) history = [history];
-      //   } catch {
-      //     history = [];
-      //   }
-      // }
-      if (item.PMCommentsHistory) {
-        try {
-          const decodedJson = decodeHtmlEntities(item.PMCommentsHistory);
-          history = JSON.parse(decodedJson);
-          if (!Array.isArray(history)) history = [history];
-        } catch {
-          history = [];
+
+      // Parse existing history only if clarifyComment is non-empty
+      if (clarifyComment && clarifyComment.trim().length > 0) {
+        if (item.PMCommentsHistory) {
+          try {
+            const decodedJson = decodeHtmlEntities(item.PMCommentsHistory);
+            history = JSON.parse(decodedJson);
+            if (!Array.isArray(history)) history = [history];
+          } catch {
+            history = [];
+          }
+        }
+
+        // Append new comment
+        const userRole = await getCurrentUserRole(context, selectedReq);
+        history.push({
+          Date: new Date().toISOString(),
+          Title: 'Clarification',
+          User: context.pageContext.user.displayName || 'Unknown User',
+          Role: userRole,
+          Data: clarifyComment,
+        });
+      } else {
+        // If no comment, keep history unchanged (no new entry)
+        if (item.PMCommentsHistory) {
+          try {
+            const decodedJson = decodeHtmlEntities(item.PMCommentsHistory);
+            history = JSON.parse(decodedJson);
+            if (!Array.isArray(history)) history = [history];
+          } catch {
+            history = [];
+          }
         }
       }
 
-      // Append new comment
-      const userRole = await getCurrentUserRole(context, selectedReq);
-      history.push({
-        Date: new Date().toISOString(),
-        Title: 'Clarification',
-        User: context.pageContext.user.displayName || 'Unknown User',
-        Role: userRole,
-        Data: clarifyComment,
-      });
+      // Prepare the update payload
+      const updatePayload: any = {
+        InvoiceAmount: clarifyInvoiceAmount,
+        PMStatus: "Submitted",
+        FinanceStatus: "Pending",
+        Customer_x0020_Contact: clarifyCustomerContact,
+        CurrentStatus: `Clarified by ${await getCurrentUserRole(context, selectedReq)}`
+      };
+
+      // Only update PMCommentsHistory if comment was provided
+      if (clarifyComment && clarifyComment.trim().length > 0) {
+        updatePayload.PMCommentsHistory = JSON.stringify(history);
+      }
 
       await sp.web.lists
         .getByTitle("Invoice Requests")
         .items.getById(selectedReq.Id)
-        .update({
-          InvoiceAmount: clarifyInvoiceAmount,
-          PMCommentsHistory: JSON.stringify(history),
-          PMStatus: "Submitted",
-          FinanceStatus: "Pending",
-          Customer_x0020_Contact: clarifyCustomerContact,
-          CurrentStatus: `Clarified by ${userRole}`
-        });
+        .update(updatePayload);
 
       setShowClarifyPanel(false);
       setShowHierPanel(false);
@@ -1319,6 +1367,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       setClarifyLoading(false);
     }
   }
+
 
   function decodeHtml(html: string): string {
     const txt = document.createElement("textarea");
@@ -1580,6 +1629,8 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
     return matchesSearch && matchesProject && matchesInvoiceStatus && matchesCurrentStatus;
   });
 
+  console.log(filteredInvoiceRequests)
+
   async function onInvoiceRequestSelect(item?: InvoiceRequest) {
     try {
       if (item) {
@@ -1764,7 +1815,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     columns={invoiceColumns}
                     isHeaderVisible={true}
                     setKey="invoiceRequestList"
-                    layoutMode={DetailsListLayoutMode.justified}
+                    // layoutMode={DetailsListLayoutMode.justified}
                     onActiveItemChanged={onInvoiceRequestSelect}
                     selectionPreservedOnEmptyClick={true}
                     selectionMode={SelectionMode.single}
@@ -2005,7 +2056,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
               </>
             )}
           </Panel>
-          <Panel
+          {/* <Panel
             isOpen={!!viewerUrl}
             onDismiss={() => {
               setViewerUrl(null);
@@ -2027,7 +2078,37 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                 fileName={viewerName}
               />
             )}
+          </Panel> */}
+          <Panel
+            isOpen={!!viewerUrl}
+            onDismiss={() => {
+              setViewerUrl(null);
+              setViewerName(null);
+              // Do NOT close parent panel here to keep parent open
+            }}
+            headerText={viewerName ?? 'Document Viewer'}
+            type={PanelType.large}
+            isLightDismiss
+            closeButtonAriaLabel="Close"
+            styles={{
+              content: { height: "100vh", display: "flex", flexDirection: "column", padding: 0 }
+            }}
+          >
+            <div style={{ flex: 1, minHeight: "100vh", display: 'flex', flexDirection: 'column' }}>
+              {viewerUrl && viewerName && (
+                <DocumentViewer
+                  url={viewerUrl}
+                  isOpen={!!viewerUrl}
+                  fileName={viewerName}
+                  onDismiss={() => {
+                    setViewerUrl(null);
+                    setViewerName(null);
+                  }}
+                />
+              )}
+            </div>
           </Panel>
+
           <Panel
             isOpen={isInvoiceRequestViewPanelOpen}
             onDismiss={() => {
@@ -2061,11 +2142,11 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                   </div>
                   <div>
                     <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItem_x0020_Value)}</Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POItem_x0020_Value)}</Text>
                   </div>
                   <div>
                     <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POAmount)}</Text>
+                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POAmount)}</Text>
                   </div>
                   <div>
                     <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
@@ -2105,23 +2186,23 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                   }}> */}
                   {formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory)?.trim() && (
-                  <TextField
-                    label="Requestor Comments"
-                    value={(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
-                    multiline
-                    disabled
-                    styles={{
-                      root: {},
-                      subComponentStyles: {
-                        label: {
-                          root: {
-                            color: primaryColor,
-                            fontWeight: 600
+                    <TextField
+                      label="Requestor Comments"
+                      value={(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
+                      multiline
+                      disabled
+                      styles={{
+                        root: {},
+                        subComponentStyles: {
+                          label: {
+                            root: {
+                              color: primaryColor,
+                              fontWeight: 600
+                            }
                           }
                         }
-                      }
-                    }}
-                  />)}
+                      }}
+                    />)}
                   {/* {renderValue(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
                   </div> */}
 
@@ -2135,23 +2216,23 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                   }}> */}
                   {formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)?.trim() && (
-                  <TextField
-                    label="Finance Comments"
-                    value={formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
-                    multiline
-                    disabled
-                    styles={{
-                      root: {},
-                      subComponentStyles: {
-                        label: {
-                          root: {
-                            color: primaryColor,
-                            fontWeight: 600
+                    <TextField
+                      label="Finance Comments"
+                      value={formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
+                      multiline
+                      disabled
+                      styles={{
+                        root: {},
+                        subComponentStyles: {
+                          label: {
+                            root: {
+                              color: primaryColor,
+                              fontWeight: 600
+                            }
                           }
                         }
-                      }
-                    }}
-                  />)}
+                      }}
+                    />)}
                   {/* </div> */}
                 </Stack>
 

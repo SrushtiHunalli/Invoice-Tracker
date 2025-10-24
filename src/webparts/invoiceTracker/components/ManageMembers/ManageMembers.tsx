@@ -23,11 +23,14 @@ interface IManageMembersProps {
     context: any;
 }
 
+interface IUserPersona extends IPersonaProps {
+  key: string;   // User email or LoginName
+}
 interface IManageMembersState {
     groups: any[];
     groupMembers: { [groupName: string]: any[] };
     selectedGroup: string;
-    selectedUsersToAdd: IPersonaProps[];
+    selectedUsersToAdd: IUserPersona[];
     isLoading: boolean;
 }
 
@@ -48,6 +51,12 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
 
     async componentDidMount() {
         await this.loadGroupsAndMembers();
+    }
+
+    componentDidUpdate(prevProps: IManageMembersProps) {
+        if (prevProps.context !== this.props.context && this.props.context) {
+            this.sp = spfi().using(SPFx(this.props.context));
+        }
     }
 
     async loadGroupsAndMembers() {
@@ -81,11 +90,19 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
     onAddUsers = async () => {
         const { selectedUsersToAdd, selectedGroup } = this.state;
         for (const user of selectedUsersToAdd) {
-            await this.sp.web.siteGroups.getByName(selectedGroup).users.add(user.title as string);
+            const emailOrLogin = user.key as string;
+            if (emailOrLogin && emailOrLogin.length > 0 && emailOrLogin.length <= 251) {
+                // Use ensureUser to resolve email/login to user in SharePoint, then add
+                const spUser = await this.sp.web.ensureUser(emailOrLogin);
+                await this.sp.web.siteGroups.getByName(selectedGroup).users.add(spUser.LoginName);
+            } else {
+                console.warn("Invalid identifier for user, skipping add:", user);
+            }
         }
         this.setState({ selectedUsersToAdd: [] });
         await this.loadGroupsAndMembers();
     };
+
 
     onRemoveUser = async (user: any) => {
         const { selectedGroup } = this.state;
@@ -93,23 +110,32 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
         await this.loadGroupsAndMembers();
     };
 
-    private async onFilterChanged(filterText: string): Promise<IPersonaProps[]> {
+    onFilterChanged = async (filterText: string): Promise<IPersonaProps[]> => {
+        console.log("Filter text:", filterText);
         if (!filterText) return [];
-
+        if (!this.sp) { console.log("SPFI not initialized!"); return []; }
         const users = await this.sp.web.siteUsers();
+        console.log("Found users:", users);
+        return users
+            .filter(user =>
+                user.Title?.toLowerCase().includes(filterText.toLowerCase()) ||
+                user.Email?.toLowerCase().includes(filterText.toLowerCase()) ||
+                user.LoginName?.toLowerCase().includes(filterText.toLowerCase())
+            )
+            .map(user => ({
+                key: user.Email || user.LoginName,  // Prefer Email, fallback to LoginName
+                text: user.Title,
+                secondaryText: user.Email || user.LoginName
+            })as IUserPersona);
 
-        return users.map(user => ({
-            key: user.LoginName,
-            text: user.Title,
-            secondaryText: user.Email || user.LoginName
-        })) as IPersonaProps[];
+
     }
 
 
     render() {
         const { groups, selectedGroup, groupMembers, selectedUsersToAdd, isLoading } = this.state;
-        
-        const allowedGroups = ["admin", "PM", "DM", "DH", "Finance","Business Manager","Business Unit Manager","Department Manager","Team Manager"];
+
+        const allowedGroups = ["admin", "PM", "DM", "DH", "Finance", "Business Manager", "Business Unit Manager", "Department Manager", "Team Manager"];
         const filteredGroups = groups.filter(g => allowedGroups.includes(g.Title));
         const groupOptions = filteredGroups.map(g => ({ key: g.Title, text: g.Title }));
         const allGroupNames = filteredGroups.map(g => g.Title);
@@ -163,7 +189,14 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
                             noResultsFoundText: "No users found",
                         }}
                         selectedItems={selectedUsersToAdd}
-                        onChange={items => this.setState({ selectedUsersToAdd: items || [] })}
+                        onChange={items => {
+                            const mapped: IUserPersona[] = (items || []).map(i => {
+                                const persona = i as IPersonaProps;
+                                const key = (persona as any).key ?? persona.secondaryText ?? persona.text ?? "";
+                                return { ...persona, key } as IUserPersona;
+                            });
+                            this.setState({ selectedUsersToAdd: mapped });
+                        }}
                         resolveDelay={300}
                         itemLimit={5}
                         styles={{ root: { width: 300 } }}
