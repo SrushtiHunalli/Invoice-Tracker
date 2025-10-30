@@ -1,12 +1,12 @@
-.rootContainer {
-  display: flex;
-  flex-direction: column;
-  // height: 100vh; /* or 100% if parent allows */
-}
+// .rootContainer {
+//   display: flex;
+//   flex-direction: column;
+//   // height: 100vh; /* or 100% if parent allows */
+// }
 
-.filterAndHeaderSection {
-  flex: 0 0 auto; /* fixed height for filters */
-}
+// .filterAndHeaderSection {
+//   flex: 0 0 auto; /* fixed height for filters */
+// }
 
 .dropdownContainer {
   width: 300px;
@@ -34,10 +34,27 @@
   height: 400px; /* fixed value, NOT 100% */
   // overflow-y: auto;
 }
-.detailsListContainer {
-  flex: 1 1 auto;
-  min-height: 0; /* important to allow shrinking within flex */
-  // overflow-y: auto; /* scroll only the list area */
-  height: 300px;
+// .detailsListContainer {
+//   flex: 1 1 auto;
+//   min-height: 0; /* important to allow shrinking within flex */
+//   // overflow-y: auto; /* scroll only the list area */
+//   height: 300px;
+// }
+
+.rootContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Or 100% if contained within a parent with explicit height */
 }
 
+.filterAndHeaderSection {
+  flex: 0 0 auto;
+  z-index: 1; /* This helps for 'sticky' if needed */
+  background: #fff; /* Optional: ensures overlap is clear */
+}
+
+.detailsListContainer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}

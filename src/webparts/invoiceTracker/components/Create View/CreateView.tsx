@@ -418,25 +418,25 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
         }
         return remaining > 0 ? (
           <TooltipHost content="Create Invoice Request" id="create-invoice-tooltip" calloutProps={{ gapSpace: 0 }} styles={{ root: { display: 'inline-block' } }}>
-          <IconButton
-            iconProps={{ iconName: "Add" }}
-            ariaLabel="Create Invoice Request"
-            // onClick={() => handleOpenInvoicePanel(item)}
-            onClick={e => {
-              // e.stopPropagation();  // Prevent DetailsList row click/selection
-              // // childPOSelection.setAllSelected(false);         // clear any previous selection
-              // // childPOSelection.setKeySelected(item.Id.toString(), true, false); // select only the clicked row
-              // handleOpenInvoicePanel(item);
-              e.stopPropagation();                // Prevent bubbling to row
-              e.preventDefault();                 // Prevent default focus behavior
-              //childPOSelection.setAllSelected(false); // Clear any other selections
-              //childPOSelection.setKeySelected(item.Id.toString(), true, false); // Select only the clicked row
-              handleOpenInvoicePanel(item);
-            }}
+            <IconButton
+              iconProps={{ iconName: "Add" }}
+              ariaLabel="Create Invoice Request"
+              // onClick={() => handleOpenInvoicePanel(item)}
+              onClick={e => {
+                // e.stopPropagation();  // Prevent DetailsList row click/selection
+                // // childPOSelection.setAllSelected(false);         // clear any previous selection
+                // // childPOSelection.setKeySelected(item.Id.toString(), true, false); // select only the clicked row
+                // handleOpenInvoicePanel(item);
+                e.stopPropagation();                // Prevent bubbling to row
+                e.preventDefault();                 // Prevent default focus behavior
+                //childPOSelection.setAllSelected(false); // Clear any other selections
+                //childPOSelection.setKeySelected(item.Id.toString(), true, false); // Select only the clicked row
+                handleOpenInvoicePanel(item);
+              }}
 
 
-            styles={{ root: { marginLeft: 8 } }}
-          />
+              styles={{ root: { marginLeft: 8 } }}
+            />
           </TooltipHost>
         ) : null;
       },
@@ -1784,26 +1784,28 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               {fetchingChildPOs ? (
                 <Spinner label="Loading child POs..." />
               ) : childPOItems.length > 0 ? (
-                <DetailsList
-                  items={childPOItems}
-                  columns={adjustedChildColumns}
-                  selection={childPOSelection}
-                  selectionMode={SelectionMode.single}
-                  setKey="childPOs"
-                  onActiveItemChanged={handleChildPORowClick}
-                  // getKey={item => item.key}
-                  styles={{
-                    root: {
-                      background: "#fff",
-                      border: "1px solid #eee",
-                      borderRadius: 6,
-                      overflowX: "hidden",
-                      width: '100%',
-                      minWidth: 0,
-                      overflow: 'auto',
-                    },
-                  }}
-                />
+                <div>
+                  <DetailsList
+                    items={childPOItems}
+                    columns={adjustedChildColumns}
+                    selection={childPOSelection}
+                    selectionMode={SelectionMode.single}
+                    setKey="childPOs"
+                    onActiveItemChanged={handleChildPORowClick}
+                    // getKey={item => item.key}
+                    styles={{
+                      root: {
+                        background: "#fff",
+                        border: "1px solid #eee",
+                        borderRadius: 6,
+                        overflowX: "auto",
+                        width: '100%',
+                        minWidth: 0,
+                        overflow: 'auto',
+                      },
+                    }}
+                  />
+                </div>
               ) : (
                 <div style={{ fontStyle: "italic", marginBottom: 10 }}>No PO items found.</div>
               )}
@@ -1835,14 +1837,16 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               {fetchingInvoices ? (
                 <Spinner label="Loading invoice requests..." />
               ) : showInvoices.length > 0 ? (
-                <DetailsList
-                  items={showInvoices}
-                  columns={adjustedInvoiceColumns}
-                  selectionMode={SelectionMode.single}
-                  onActiveItemChanged={onInvoiceRequestClicked}
-                  setKey="invoiceRequests"
-                  styles={{ root: { background: "#fff", border: "1px solid #eee", borderRadius: 6 } }}
-                />
+                <div>
+                  <DetailsList
+                    items={showInvoices}
+                    columns={adjustedInvoiceColumns}
+                    selectionMode={SelectionMode.single}
+                    onActiveItemChanged={onInvoiceRequestClicked}
+                    setKey="invoiceRequests"
+                    styles={{ root: { overflowX: 'auto', background: "#fff", border: "1px solid #eee", borderRadius: 6 } }}
+                  />
+                </div>
               ) : (
                 <div style={{ fontStyle: "italic" }}>No invoice requests found.</div>
               )}
@@ -2019,13 +2023,15 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 <Text variant="mediumPlus" block style={{ fontWeight: 600, marginBottom: 8 }}>
                   Existing Invoice Requests for "{invoiceFormState.POItemTitle}"
                 </Text>
-                <DetailsList
-                  items={invoiceRequests.filter((inv) => inv.POItemTitle === invoiceFormState.POItemTitle)}
-                  columns={invoiceColumnsView}
-                  selectionMode={SelectionMode.single}
-                  onItemInvoked={onInvoiceRequestClicked}
-                  styles={{ root: { maxHeight: 200, overflowY: "auto", background: "#fafafa", border: "1px solid #eee", borderRadius: 4 } }}
-                />
+                <div>
+                  <DetailsList
+                    items={invoiceRequests.filter((inv) => inv.POItemTitle === invoiceFormState.POItemTitle)}
+                    columns={invoiceColumnsView}
+                    selectionMode={SelectionMode.single}
+                    onItemInvoked={onInvoiceRequestClicked}
+                    styles={{ root: { maxHeight: 200, overflowY: "auto", background: "#fafafa", border: "1px solid #eee", borderRadius: 4 } }}
+                  />
+                </div>
               </div>
             </Stack>
           )}
@@ -2117,7 +2123,11 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
               }}>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Created: </Text>
-                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString()}</Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}</Text>
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Created By: </Text>
@@ -2125,7 +2135,11 @@ const CreateView: React.FC<CreateViewProps> = ({ sp, projectsp, context }) => {
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified: </Text>
-                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString()}</Text>
+                  <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}</Text>
                 </div>
                 <div>
                   <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified By: </Text>

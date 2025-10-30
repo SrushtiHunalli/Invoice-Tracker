@@ -2,12 +2,12 @@ import * as React from "react";
 import { INavLink, INavLinkGroup, Nav, Persona, PersonaSize, ProgressIndicator, Icon } from "office-ui-fabric-react";
 import { spfi, SPFI } from "@pnp/sp";
 import { SPFx } from "@pnp/sp/presets/all";
-import Dashboard from "./Dashboard";
 import CreateView from "./Create View/CreateView";
 import Settings from "./Settings/Settings";
 import MyRequests from "./MyRequests/MyRequests";
 import FinanceView from "./Finance View/FinanceView";
 import Home from "./Home/Home";
+import Dashboard from "./Dashboard";
 import ManageMembers from "./ManageMembers/ManageMembers";
 import styles from "./InvoiceTracker.module.scss";
 import Logo from "../assets/Logo.png";
@@ -43,6 +43,7 @@ interface IInvoiceTrackerState {
   userGroups: string[];
   isNavCollapsed: boolean;
   pageConfig: Record<string, boolean>;
+  userPhotoUrl?: string;
 }
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
@@ -94,6 +95,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       userGroups: [],
       isNavCollapsed: false,
       pageConfig: props.pageConfig || {},
+      userPhotoUrl: undefined,
     };
     this.sp = spfi().using(SPFx(this.props.context));
     this.setCanvasParentStyles();
@@ -120,12 +122,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
     window.addEventListener("popstate", this.onPopState);
     await this.fetchUserGroups();
-
-    // const hash = window.location.hash;
-    // const initialTab = hash ? hash.replace("#", "") : "home";
-    // window.history.replaceState({ selectedTab: initialTab }, "", `#${initialTab}`);
-
-    // this.setState({ selectedTab: initialTab });
     const fragment = window.location.hash.substring(1); // 'myrequests?selectedInvoice=13'
     const [tab, query] = fragment.split("?");
     const params = new URLSearchParams(query || "");
@@ -216,6 +212,14 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
     this.setState({ navLinks, loading: false, progress: 100 });
 
+    try {
+      const email = this.props.context.pageContext.user.email;
+      const photoUrl = `${this.props.context.pageContext.web.absoluteUrl}/_layouts/15/userphoto.aspx?size=M&accountname=${encodeURIComponent(email)}`;
+      this.setState({ userPhotoUrl: photoUrl });
+    } catch (e) {
+      console.warn("Failed to load user profile photo", e);
+      this.setState({ userPhotoUrl: undefined });
+    }
     this.setCanvasParentStyles();
   }
 
@@ -463,13 +467,16 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     }
     if (isPMorDMorDH || isAdmin) {
       links.push({ key: "myrequests", name: "My Requests", iconProps: { iconName: "ViewDashboard" }, url: "" });
-      links.push({ key: "Createview", name: "Create Invoice Request", iconProps: { iconName: "People" }, url: "" });
+      links.push({ key: "Createview", name: "Create Invoice Request", iconProps: { iconName: "Add" }, url: "" });
     }
     if (isFinance || isAdmin) {
       links.push({ key: "updaterequests", name: "Update Invoice Request", iconProps: { iconName: "Money" }, url: "" });
     }
     if (isBuBUDepTeam || isAdmin) {
-      links.push({ key: "businessview", name: "Business View", iconProps: { iconName: "Financial" }, url: "" });
+      links.push({ key: "businessview", name: "Business View", iconProps: { iconName: "People" }, url: "" });
+    }
+    if (isBuBUDepTeam || isPMorDMorDH || isAdmin) {
+      links.push({ key: "InvoiceDashboard", name: "Invoice Dashboard", iconProps: { iconName: "Financial" }, url: "" });
     }
     if (isAdmin) {
       links.push({ key: "settings", name: "Settings", iconProps: { iconName: "Settings" }, url: "" });
@@ -614,6 +621,11 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         if (isBuBUDepTeam || isAdminUser)
           return <BusinessView sp={this.sp} projectsp={this.projectSp} context={this.props.context} onNavigate={this.handleNavigate} />;
         break;
+      case "InvoiceDashboard":
+        if (isPMorDMorDH || isAdminUser || isBuBUDepTeam) {
+          return <Dashboard sp={this.sp} projectsp={this.projectSp} context={this.props.context} />;
+          break;
+        }
       case "settings":
         if (isAdminUser)
           return <Settings sp={this.sp} context={this.props.context} pageConfig={this.props.pageConfig} onConfigChange={this.handleConfigChange} />;
@@ -627,8 +639,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           return <Help isOpen={true} onDismiss={() => this.setState({ selectedTab: "home" })} />;
         }
         break;
-      default:
-        return <Dashboard />;
     }
     // If user not authorized for selected tab
     return <div style={{ padding: 40, textAlign: "center", color: "#b00" }}>
@@ -752,7 +762,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           </div>
           {!this.state.isNavCollapsed && (
             <div className={styles.sidebarFooter}>
-              <Persona text={this.props.userDisplayName} size={PersonaSize.size24} />
+              <Persona text={this.props.userDisplayName} size={PersonaSize.size24} imageUrl={this.state.userPhotoUrl} />
               {/* <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
                 {`(${this.state.userGroups.join(", ")})`}
               </div> */}

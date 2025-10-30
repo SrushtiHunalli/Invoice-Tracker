@@ -1229,7 +1229,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
         Author: item.Author?.Title || "",
         Modified: item.Modified,
         Editor: item.Editor?.Title || "",
-        CurrentStatus: item.CurrentStatus,  
+        CurrentStatus: item.CurrentStatus,
         AttachmentFiles: item.AttachmentFiles,
         InvoiceAmount: item.InvoiceAmount,
       };
@@ -1734,15 +1734,6 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
             />
           </div>
           <div>
-            {/* <Label>Project Name</Label> */}
-            {/* <Dropdown
-            placeholder="Project Name"
-            options={toDropdownOptions(projectOptions)}
-            selectedKey={filterProjectName || undefined}
-            onChange={(e, option) => setFilterProjectName(option?.key as string || "All")}
-            styles={{ root: { width: 160 } }}
-            ariaLabel="Project Name"
-          /> */}
             <Dropdown
               label="Project Name"
               options={[{ key: "All", text: "All" }, ...projectOptions.map(proj => ({ key: proj, text: proj }))]}
@@ -1804,9 +1795,9 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
       ) : (
         <>
           <div className={`ms-Grid-row ${styles.detailsListContainer}`}>
-
-            <div style={{ height: 300, position: 'relative', overflow: 'auto' }}>
+            <div style={{ height: 900, position: 'relative'}}>
               <ScrollablePane>
+                {/* <ScrollablePane> */}
                 <div
                   className={`ms-Grid-col ms-sm12 ms-md12 ms-lg12 ${styles.detailsList_Scrollablepane_Container}`}
                 >
@@ -1820,6 +1811,7 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     selectionPreservedOnEmptyClick={true}
                     selectionMode={SelectionMode.single}
                     onRenderDetailsHeader={onRenderDetailsHeader}
+                    styles={{ root: { height: '100%' } }}
                   />
                 </div>
                 {columnFilterMenu.visible && (
@@ -1834,229 +1826,229 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
               </ScrollablePane>
             </div>
           </div>
-          <Panel
-            isOpen={showHierPanel}
-            onDismiss={() => {
-              // Prevent closing if viewer panel is open
-              const fragment = window.location.hash.substring(1);
-              const [tab, query] = fragment.split("?");
-              const params = new URLSearchParams(query || "");
-              params.delete("selectedInvoice");
+      <Panel
+        isOpen={showHierPanel}
+        onDismiss={() => {
+          // Prevent closing if viewer panel is open
+          const fragment = window.location.hash.substring(1);
+          const [tab, query] = fragment.split("?");
+          const params = new URLSearchParams(query || "");
+          params.delete("selectedInvoice");
 
-              const newFragment = params.toString() ? `${tab}?${params.toString()}` : tab;
-              window.history.replaceState(null, '', `#${newFragment}`);
+          const newFragment = params.toString() ? `${tab}?${params.toString()}` : tab;
+          window.history.replaceState(null, '', `#${newFragment}`);
 
-              if (showClarifyPanel) return;
-              if (!viewerUrl) {
-                setShowHierPanel(false);
-                setSelectedReq(null);
-                setSelectedPOItem(null);
-                setPOHierarchy(null);
-              }
+          if (showClarifyPanel) return;
+          if (!viewerUrl) {
+            setShowHierPanel(false);
+            setSelectedReq(null);
+            setSelectedPOItem(null);
+            setPOHierarchy(null);
+          }
 
-            }}
-            isBlocking={!!viewerUrl}
-            // headerText={`Invoice Details:`}
-            type={PanelType.largeFixed}
-            // isLightDismiss
-            closeButtonAriaLabel="Close"
-          >
-            {selectedReq && selectedProject && (
-              <>
-                <InvoiceDetailsCard
-                  item={selectedReq}
-                  onShowAttachment={(url, name) => {
-                    setViewerUrl(url);
-                    setViewerName(name);
+        }}
+        isBlocking={!!viewerUrl}
+        // headerText={`Invoice Details:`}
+        type={PanelType.largeFixed}
+        // isLightDismiss
+        closeButtonAriaLabel="Close"
+      >
+        {selectedReq && selectedProject && (
+          <>
+            <InvoiceDetailsCard
+              item={selectedReq}
+              onShowAttachment={(url, name) => {
+                setViewerUrl(url);
+                setViewerName(name);
+              }}
+            />
+            {selectedReq.PMStatus === "Pending" && (
+              <div style={{ margin: "16px 0" }}>
+                <PrimaryButton
+                  onClick={() => {
+                    setClarifyInvoiceAmount(selectedReq.InvoiceAmount);
+                    setClarifyCustomerContact(selectedReq.Customer_x0020_Contact);
+                    setClarifyComment("");
+                    setShowClarifyPanel(true);
                   }}
-                />
-                {selectedReq.PMStatus === "Pending" && (
-                  <div style={{ margin: "16px 0" }}>
-                    <PrimaryButton
-                      onClick={() => {
-                        setClarifyInvoiceAmount(selectedReq.InvoiceAmount);
-                        setClarifyCustomerContact(selectedReq.Customer_x0020_Contact);
-                        setClarifyComment("");
-                        setShowClarifyPanel(true);
-                      }}
-                    // style={{ padding: '8px 24px', background: '#166BDD', color: '#fff', borderRadius: 4, border: 'none' }}
-                    >
-                      Clarify
-                    </PrimaryButton>
-                  </div>
-                )}
-              </>
-            )}
-            {poHierarchy && poHierarchy.lineItemGroups.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <strong>All PO Items for {poHierarchy.mainPO.POID}</strong>
-                <DetailsList
-                  items={getLineItemsList(poHierarchy)}
-                  onActiveItemChanged={(item) => setSelectedPOItem(normalizeSelectedPOItem(item))}
-                  columns={poColumnsLine}
-                  selectionMode={SelectionMode.single}
-                  setKey="lineItemsList"
-                  styles={{ root: { marginBottom: 16 } }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <strong>
-                    Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
-                  </strong>
-                  <PrimaryButton
-                    text={`Show all Invoice Requests`}
-                    onClick={() => setSelectedPOItem(null)}
-                    disabled={!selectedPOItem}
-                  // style={{
-                  //   marginLeft: 12,
-                  //   // color: "white",
-                  //   // background: primaryColor,
-                  //   fontWeight: 600,
-                  //   borderRadius: 4,
-                  //   padding: "4px 16px"
-                  // }}
-                  />
-                </div>
-
-                <DetailsList
-                  items={getFilteredRequests()}
-                  columns={groupedInvColumns}
-                  selectionMode={SelectionMode.single}
-                  onActiveItemChanged={onInvoiceRequestClicked}
-                  // selection={selection}
-                  setKey="invoiceRequestsListByPO"
-                />
-
+                // style={{ padding: '8px 24px', background: '#166BDD', color: '#fff', borderRadius: 4, border: 'none' }}
+                >
+                  Clarify
+                </PrimaryButton>
               </div>
             )}
+          </>
+        )}
+        {poHierarchy && poHierarchy.lineItemGroups.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <strong>All PO Items for {poHierarchy.mainPO.POID}</strong>
+            <DetailsList
+              items={getLineItemsList(poHierarchy)}
+              onActiveItemChanged={(item) => setSelectedPOItem(normalizeSelectedPOItem(item))}
+              columns={poColumnsLine}
+              selectionMode={SelectionMode.single}
+              setKey="lineItemsList"
+              styles={{ root: { marginBottom: 16 } }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong>
+                Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
+              </strong>
+              <PrimaryButton
+                text={`Show all Invoice Requests`}
+                onClick={() => setSelectedPOItem(null)}
+                disabled={!selectedPOItem}
+              // style={{
+              //   marginLeft: 12,
+              //   // color: "white",
+              //   // background: primaryColor,
+              //   fontWeight: 600,
+              //   borderRadius: 4,
+              //   padding: "4px 16px"
+              // }}
+              />
+            </div>
 
-            {poHierarchy && poHierarchy.lineItemGroups.length < 1 && (
-              <div style={{ marginTop: 20 }}>
-                {/* <h3>PO Hierarchy</h3> */}
-                <div style={{ marginBottom: 12 }}>
-                  {/* <strong>{poHierarchy.mainPO.POID}</strong> */}
-                  <strong>All PO Items for {poHierarchy.mainPO.POID}</strong>
-                </div>
-                <DetailsList
-                  items={getAllPOItemsForList(poHierarchy)}
-                  columns={poColumns}
-                  selectionMode={SelectionMode.single}
-                  onActiveItemChanged={(item) => setSelectedPOItem(item)}
-                  setKey="poItemsList"
-                  styles={{ root: { marginBottom: 20 } }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <strong>
-                    Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
-                  </strong>
-                  <PrimaryButton
-                    text="Show all Invoice Requests"
-                    onClick={() => setSelectedPOItem(null)}
-                    disabled={!selectedPOItem}
-                    style={{
-                      marginLeft: 12,
-                      color: "white",
-                      background: "#166BDD",
-                      fontWeight: 600,
-                      borderRadius: 4,
-                      padding: "4px 16px"
-                    }}
-                    title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
-                  />
+            <DetailsList
+              items={getFilteredRequests()}
+              columns={groupedInvColumns}
+              selectionMode={SelectionMode.single}
+              onActiveItemChanged={onInvoiceRequestClicked}
+              // selection={selection}
+              setKey="invoiceRequestsListByPO"
+            />
 
-                </div>
+          </div>
+        )}
 
-                <DetailsList
-                  items={getFilteredRequests()}
-                  columns={groupedInvColumns}
-                  selectionMode={SelectionMode.single}
-                  // selection={selection}
-                  onActiveItemChanged={onInvoiceRequestClicked}
-                  setKey="invoiceRequestsListByPO"
-                />
-              </div>
-            )}
-          </Panel>
-          <Panel
-            isOpen={showClarifyPanel}
-            onDismiss={() => setShowClarifyPanel(false)}
-            headerText={`Clarify Invoice: ${selectedReq?.Title ?? ''}`}
-            type={PanelType.medium}
-            isLightDismiss={false}
-            hasCloseButton={true}
-          >
-            {selectedReq && (
-              <>
-                <TextField
-                  label="POID"
-                  value={selectedReq.PurchaseOrder || ''}
-                  disabled
-                />
-                <TextField
-                  label="PO Amount"
-                  value={selectedReq?.POAmount?.toString() || ''}
-                  disabled
-                />
-                <TextField
-                  label="PO Item Title"
-                  value={selectedReq["POItem_x0020_Title"] || ''}
-                  disabled
-                />
-                <TextField
-                  label="PO Item Value"
-                  value={selectedReq["POItem_x0020_Value"]?.toString() || ''}
-                  disabled
-                />
-                <TextField
-                  label="Customer Contact"
-                  value={clarifyCustomerContact?.toString() || ''}
-                  onChange={(_, val) => setClarifyCustomerContact(val || '')}
-                  required
-                />
-                <TextField
-                  label="Invoiced Amount"
-                  value={clarifyInvoiceAmount?.toString() || ''}
-                  onChange={(_, val) => setClarifyInvoiceAmount(val ? Number(val) : undefined)}
-                  required
-                />
-                <TextField
-                  label="Add Comment"
-                  multiline
-                  value={clarifyComment}
-                  onChange={(_, val) => setClarifyComment(val || '')}
-                />
-                <TextField
-                  label="Requestor Comment"
-                  value={formatCommentsHistory(selectedReq.PMCommentsHistory)}
-                  multiline
-                  disabled
-                />
-                <TextField
-                  label="Finance Comments"
-                  value={formatCommentsHistory(selectedReq.FinanceCommentsHistory)}
-                  multiline
-                  disabled
-                />
-                <div style={{ marginTop: 12 }}>
-                  <PrimaryButton
-                    // type="button"
-                    disabled={clarifyLoading || clarifyInvoiceAmount === undefined}
-                    onClick={handleClarifySubmit}
-                    style={{
-                      background: primaryColor,
-                      color: '#fff',
-                      padding: '8px 24px',
-                      border: 'none',
-                      // borderRadius: 4,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Submit
-                  </PrimaryButton>
-                </div>
-              </>
-            )}
-          </Panel>
-          {/* <Panel
+        {poHierarchy && poHierarchy.lineItemGroups.length < 1 && (
+          <div style={{ marginTop: 20 }}>
+            {/* <h3>PO Hierarchy</h3> */}
+            <div style={{ marginBottom: 12 }}>
+              {/* <strong>{poHierarchy.mainPO.POID}</strong> */}
+              <strong>All PO Items for {poHierarchy.mainPO.POID}</strong>
+            </div>
+            <DetailsList
+              items={getAllPOItemsForList(poHierarchy)}
+              columns={poColumns}
+              selectionMode={SelectionMode.single}
+              onActiveItemChanged={(item) => setSelectedPOItem(item)}
+              setKey="poItemsList"
+              styles={{ root: { marginBottom: 20 } }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong>
+                Invoice Requests for {selectedPOItem ? selectedPOItem.POID : poHierarchy.mainPO.POID}
+              </strong>
+              <PrimaryButton
+                text="Show all Invoice Requests"
+                onClick={() => setSelectedPOItem(null)}
+                disabled={!selectedPOItem}
+                style={{
+                  marginLeft: 12,
+                  color: "white",
+                  background: "#166BDD",
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  padding: "4px 16px"
+                }}
+                title={`Show all Invoice Requests for ${poHierarchy.mainPO.POID}`}
+              />
+
+            </div>
+
+            <DetailsList
+              items={getFilteredRequests()}
+              columns={groupedInvColumns}
+              selectionMode={SelectionMode.single}
+              // selection={selection}
+              onActiveItemChanged={onInvoiceRequestClicked}
+              setKey="invoiceRequestsListByPO"
+            />
+          </div>
+        )}
+      </Panel>
+      <Panel
+        isOpen={showClarifyPanel}
+        onDismiss={() => setShowClarifyPanel(false)}
+        headerText={`Clarify Invoice: ${selectedReq?.Title ?? ''}`}
+        type={PanelType.medium}
+        isLightDismiss={false}
+        hasCloseButton={true}
+      >
+        {selectedReq && (
+          <>
+            <TextField
+              label="POID"
+              value={selectedReq.PurchaseOrder || ''}
+              disabled
+            />
+            <TextField
+              label="PO Amount"
+              value={selectedReq?.POAmount?.toString() || ''}
+              disabled
+            />
+            <TextField
+              label="PO Item Title"
+              value={selectedReq["POItem_x0020_Title"] || ''}
+              disabled
+            />
+            <TextField
+              label="PO Item Value"
+              value={selectedReq["POItem_x0020_Value"]?.toString() || ''}
+              disabled
+            />
+            <TextField
+              label="Customer Contact"
+              value={clarifyCustomerContact?.toString() || ''}
+              onChange={(_, val) => setClarifyCustomerContact(val || '')}
+              required
+            />
+            <TextField
+              label="Invoiced Amount"
+              value={clarifyInvoiceAmount?.toString() || ''}
+              onChange={(_, val) => setClarifyInvoiceAmount(val ? Number(val) : undefined)}
+              required
+            />
+            <TextField
+              label="Add Comment"
+              multiline
+              value={clarifyComment}
+              onChange={(_, val) => setClarifyComment(val || '')}
+            />
+            <TextField
+              label="Requestor Comment"
+              value={formatCommentsHistory(selectedReq.PMCommentsHistory)}
+              multiline
+              disabled
+            />
+            <TextField
+              label="Finance Comments"
+              value={formatCommentsHistory(selectedReq.FinanceCommentsHistory)}
+              multiline
+              disabled
+            />
+            <div style={{ marginTop: 12 }}>
+              <PrimaryButton
+                // type="button"
+                disabled={clarifyLoading || clarifyInvoiceAmount === undefined}
+                onClick={handleClarifySubmit}
+                style={{
+                  background: primaryColor,
+                  color: '#fff',
+                  padding: '8px 24px',
+                  border: 'none',
+                  // borderRadius: 4,
+                  cursor: 'pointer'
+                }}
+              >
+                Submit
+              </PrimaryButton>
+            </div>
+          </>
+        )}
+      </Panel>
+      {/* <Panel
             isOpen={!!viewerUrl}
             onDismiss={() => {
               setViewerUrl(null);
@@ -2079,105 +2071,105 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
               />
             )}
           </Panel> */}
-          <Panel
-            isOpen={!!viewerUrl}
-            onDismiss={() => {
-              setViewerUrl(null);
-              setViewerName(null);
-              // Do NOT close parent panel here to keep parent open
-            }}
-            headerText={viewerName ?? 'Document Viewer'}
-            type={PanelType.large}
-            isLightDismiss
-            closeButtonAriaLabel="Close"
-            styles={{
-              content: { height: "100vh", display: "flex", flexDirection: "column", padding: 0 }
-            }}
-          >
-            <div style={{ flex: 1, minHeight: "100vh", display: 'flex', flexDirection: 'column' }}>
-              {viewerUrl && viewerName && (
-                <DocumentViewer
-                  url={viewerUrl}
-                  isOpen={!!viewerUrl}
-                  fileName={viewerName}
-                  onDismiss={() => {
-                    setViewerUrl(null);
-                    setViewerName(null);
-                  }}
-                />
-              )}
+      <Panel
+        isOpen={!!viewerUrl}
+        onDismiss={() => {
+          setViewerUrl(null);
+          setViewerName(null);
+          // Do NOT close parent panel here to keep parent open
+        }}
+        headerText={viewerName ?? 'Document Viewer'}
+        type={PanelType.large}
+        isLightDismiss
+        closeButtonAriaLabel="Close"
+        styles={{
+          content: { height: "100vh", display: "flex", flexDirection: "column", padding: 0 }
+        }}
+      >
+        <div style={{ flex: 1, minHeight: "100vh", display: 'flex', flexDirection: 'column' }}>
+          {viewerUrl && viewerName && (
+            <DocumentViewer
+              url={viewerUrl}
+              isOpen={!!viewerUrl}
+              fileName={viewerName}
+              onDismiss={() => {
+                setViewerUrl(null);
+                setViewerName(null);
+              }}
+            />
+          )}
+        </div>
+      </Panel>
+
+      <Panel
+        isOpen={isInvoiceRequestViewPanelOpen}
+        onDismiss={() => {
+          setIsInvoiceRequestViewPanelOpen(false);
+          setSelectedInvoiceRequest(null);
+        }}
+        headerText="Invoice Request Details"
+        type={PanelType.medium}
+        styles={{
+          content: { padding: 20 }, // More generous padding
+          headerText: { fontWeight: 600, fontSize: 22, color: primaryColor }
+        }}
+      >
+        {selectedInvoiceRequest && (
+          <Stack tokens={{ childrenGap: 24 }}>
+            {/* <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor, marginBottom: 12 } }} /> */}
+
+            {/* Main Data Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)', // two columns
+              gap: 24,
+              background: '#f9f9f9',
+              padding: 20,
+              borderRadius: 12,
+              marginBottom: 24
+            }}>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Title: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItem_x0020_Title)}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POItem_x0020_Value)}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POAmount)}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Status)}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>POID Invoiced % (PO): </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
+                  {calculateInvoicedPercentForPO(
+                    selectedInvoiceRequest.PurchaseOrder,
+                    invoiceRequests
+                  ).toFixed(0)}%
+                </Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>POItem Invoiced %: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
+                  {calculateInvoicedPercentForPOItem(
+                    selectedInvoiceRequest.PurchaseOrder,
+                    selectedInvoiceRequest.POItem_x0020_Title,
+                    selectedInvoiceRequest.POItem_x0020_Value,
+                    invoiceRequests
+                  ).toFixed(0)}%
+                </Text>
+              </div>
             </div>
-          </Panel>
 
-          <Panel
-            isOpen={isInvoiceRequestViewPanelOpen}
-            onDismiss={() => {
-              setIsInvoiceRequestViewPanelOpen(false);
-              setSelectedInvoiceRequest(null);
-            }}
-            headerText="Invoice Request Details"
-            type={PanelType.medium}
-            styles={{
-              content: { padding: 20 }, // More generous padding
-              headerText: { fontWeight: 600, fontSize: 22, color: primaryColor }
-            }}
-          >
-            {selectedInvoiceRequest && (
-              <Stack tokens={{ childrenGap: 24 }}>
-                {/* <Icon iconName="PageDetails" styles={{ root: { fontSize: 36, color: primaryColor, marginBottom: 12 } }} /> */}
-
-                {/* Main Data Grid */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)', // two columns
-                  gap: 24,
-                  background: '#f9f9f9',
-                  padding: 20,
-                  borderRadius: 12,
-                  marginBottom: 24
-                }}>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Title: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.POItem_x0020_Title)}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>PO Item Value: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POItem_x0020_Value)}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoiced Amount: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{getCurrencySymbol(selectedInvoiceRequest.Currency)} {renderValue(selectedInvoiceRequest.POAmount)}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Invoice Status: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Status)}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>POID Invoiced % (PO): </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
-                      {calculateInvoicedPercentForPO(
-                        selectedInvoiceRequest.PurchaseOrder,
-                        invoiceRequests
-                      ).toFixed(0)}%
-                    </Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>POItem Invoiced %: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>
-                      {calculateInvoicedPercentForPOItem(
-                        selectedInvoiceRequest.PurchaseOrder,
-                        selectedInvoiceRequest.POItem_x0020_Title,
-                        selectedInvoiceRequest.POItem_x0020_Value,
-                        invoiceRequests
-                      ).toFixed(0)}%
-                    </Text>
-                  </div>
-                </div>
-
-                {/* Comments Section */}
-                <Stack tokens={{ childrenGap: 18 }}>
-                  {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Requestor Comments</Text> */}
-                  {/* <div style={{
+            {/* Comments Section */}
+            <Stack tokens={{ childrenGap: 18 }}>
+              {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Requestor Comments</Text> */}
+              {/* <div style={{
                     background: '#fff',
                     border: '1px solid #eee',
                     borderRadius: 8,
@@ -2185,29 +2177,29 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     minHeight: 50,
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                   }}> */}
-                  {formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory)?.trim() && (
-                    <TextField
-                      label="Requestor Comments"
-                      value={(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
-                      multiline
-                      disabled
-                      styles={{
-                        root: {},
-                        subComponentStyles: {
-                          label: {
-                            root: {
-                              color: primaryColor,
-                              fontWeight: 600
-                            }
-                          }
+              {formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory)?.trim() && (
+                <TextField
+                  label="Requestor Comments"
+                  value={(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
+                  multiline
+                  disabled
+                  styles={{
+                    root: {},
+                    subComponentStyles: {
+                      label: {
+                        root: {
+                          color: primaryColor,
+                          fontWeight: 600
                         }
-                      }}
-                    />)}
-                  {/* {renderValue(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
+                      }
+                    }
+                  }}
+                />)}
+              {/* {renderValue(formatCommentsHistory(selectedInvoiceRequest.PMCommentsHistory))}
                   </div> */}
 
-                  {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Finance Comments</Text> */}
-                  {/* <div style={{
+              {/* <Text variant="medium" styles={{ root: { fontWeight: 600, color: primaryColor } }}>Finance Comments</Text> */}
+              {/* <div style={{
                     background: '#fff',
                     border: '1px solid #eee',
                     borderRadius: 8,
@@ -2215,77 +2207,77 @@ export default function MyRequests({ sp, projectsp, context, initialFilters, get
                     minHeight: 50,
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                   }}> */}
-                  {formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)?.trim() && (
-                    <TextField
-                      label="Finance Comments"
-                      value={formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
-                      multiline
-                      disabled
-                      styles={{
-                        root: {},
-                        subComponentStyles: {
-                          label: {
-                            root: {
-                              color: primaryColor,
-                              fontWeight: 600
-                            }
-                          }
+              {formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)?.trim() && (
+                <TextField
+                  label="Finance Comments"
+                  value={formatCommentsHistory(selectedInvoiceRequest.FinanceCommentsHistory)}
+                  multiline
+                  disabled
+                  styles={{
+                    root: {},
+                    subComponentStyles: {
+                      label: {
+                        root: {
+                          color: primaryColor,
+                          fontWeight: 600
                         }
-                      }}
-                    />)}
-                  {/* </div> */}
-                </Stack>
+                      }
+                    }
+                  }}
+                />)}
+              {/* </div> */}
+            </Stack>
 
-                {/* Metadata */}
-                <Separator styles={{ root: { marginTop: 16, marginBottom: 16 } }} />
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: 18,
-                  padding: 14,
-                  background: '#f5f5fa',
-                  borderRadius: 8
-                }}>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Created: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString()}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Created By: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Author?.Title)}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString()}</Text>
-                  </div>
-                  <div>
-                    <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified By: </Text>
-                    <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Editor?.Title)}</Text>
-                  </div>
-                </div>
-              </Stack>
-            )}
-          </Panel>
-          <Dialog
-            hidden={!dialogVisible}
-            onDismiss={() => setDialogVisible(false)}
-            dialogContentProps={{
-              type: dialogType === "error" ? DialogType.largeHeader : DialogType.normal,
-              title: dialogType === "error" ? "Error" : "Success",
-              subText: dialogMessage,
-            }}
-            modalProps={{
-              isBlocking: false,
-            }}
-          >
-            <DialogFooter styles={{ actions: { justifyContent: 'center' } }}>
-              <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" />
-            </DialogFooter>
-          </Dialog>
+            {/* Metadata */}
+            <Separator styles={{ root: { marginTop: 16, marginBottom: 16 } }} />
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 18,
+              padding: 14,
+              background: '#f5f5fa',
+              borderRadius: 8
+            }}>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Created: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Created).toLocaleDateString()}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Created By: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Author?.Title)}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{new Date(selectedInvoiceRequest.Modified).toLocaleDateString()}</Text>
+              </div>
+              <div>
+                <Text variant="small" styles={{ root: { color: primaryColor } }}>Modified By: </Text>
+                <Text styles={{ root: { fontWeight: 400, fontSize: 12 } }}>{renderValue(selectedInvoiceRequest.Editor?.Title)}</Text>
+              </div>
+            </div>
+          </Stack>
+        )}
+      </Panel>
+      <Dialog
+        hidden={!dialogVisible}
+        onDismiss={() => setDialogVisible(false)}
+        dialogContentProps={{
+          type: dialogType === "error" ? DialogType.largeHeader : DialogType.normal,
+          title: dialogType === "error" ? "Error" : "Success",
+          subText: dialogMessage,
+        }}
+        modalProps={{
+          isBlocking: false,
+        }}
+      >
+        <DialogFooter styles={{ actions: { justifyContent: 'center' } }}>
+          <PrimaryButton onClick={() => setDialogVisible(false)} text="OK" />
+        </DialogFooter>
+      </Dialog>
 
-        </>
-      )
-      }
+    </>
+  )
+}
     </div >
   );
 }

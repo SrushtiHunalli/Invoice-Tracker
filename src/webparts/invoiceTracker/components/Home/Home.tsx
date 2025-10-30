@@ -111,7 +111,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [isAccessDeniedDialogVisible, setIsAccessDeniedDialogVisible] = React.useState(false);
   // Responsive card size states
-  const [cardWidth, setCardWidth] = useState<number | string>(220);
+  const [cardWidth, setCardWidth] = useState<number | string>(150);
   const [cardHeight, setCardHeight] = useState<number | string>(152);
   const [cardPadding, setCardPadding] = useState<number | string>(24);
 
@@ -128,7 +128,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
         setCardHeight(120);
         setCardPadding(14);
       } else {
-        setCardWidth(220);
+        setCardWidth(150);
         setCardHeight(152);
         setCardPadding(24);
       }
@@ -218,7 +218,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
       paymentReceived: { Status: "Payment Received" },
     };
     if (showAll || showPmOnly) onNavigate("myrequests", { initialFilters: filterMap[filterKey] });
-    else if (showFinanceOnly) onNavigate("financeview", { initialFilters: filterMap[filterKey] });
+    else if (showFinanceOnly) onNavigate("updaterequests", { initialFilters: filterMap[filterKey] });
     setIsAccessDeniedDialogVisible(true);
   }
 

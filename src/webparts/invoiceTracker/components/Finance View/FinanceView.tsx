@@ -70,7 +70,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   // const [isClarificationOpen,] = React.useState(false);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  // const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerFileUrl, setViewerFileUrl] = useState<string | null>(null);
   const [viewerFileName, setViewerFileName] = useState<string | null>(null);
   const [originalStatus, setOriginalStatus] = useState<string | null>(null);
@@ -1163,7 +1163,6 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
             styles={{ root: { height: 'calc(100vh - 150px)', overflow: 'hidden' } }}
             tokens={{ childrenGap: 20 }}
           >
-            {!isViewerOpen && (
               <Stack
                 styles={{
                   root: {
@@ -1422,7 +1421,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                     {attachments.map((file, index) => (
                       <li key={index} className="attachmentRow">
                         <span className="attachmentFileName" style={{ flexGrow: 1, color: '#0078d4', textDecoration: 'underline', cursor: 'pointer' }}
-                          onClick={() => { setViewerFileUrl(URL.createObjectURL(file)); setViewerFileName(file.name); setIsViewerOpen(true); }}>
+                          onClick={() => { setViewerFileUrl(URL.createObjectURL(file)); setViewerFileName(file.name);}}>
                           {file.name}
                         </span>
                         <div className="attachmentButtons" style={{ display: 'flex', gap: '8px' }}>
@@ -1443,7 +1442,7 @@ export default function FinanceView({ sp, projectsp, context, initialFilters, on
                   <PrimaryButton onClick={handleSave} text="Submit" disabled={loading} style={{ marginTop: 18 }} />
                 </Stack>
               </Stack>
-            )}
+            )
           </Stack>
         )}
         {/* Document viewer panel unchanged */}
