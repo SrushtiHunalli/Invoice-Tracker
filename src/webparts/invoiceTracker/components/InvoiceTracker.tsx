@@ -13,19 +13,21 @@ import styles from "./InvoiceTracker.module.scss";
 import Logo from "../assets/Logo.png";
 import BusinessView from "./BusinessView/BusinessView";
 import Help from "./Help/Help";
-export interface IInvoiceTrackerProps {
-  description: string;
-  isDarkTheme: boolean;
-  environmentMessage: string;
-  hasTeamsContext: boolean;
-  context: any;
-  userDisplayName: string;
-  onConfigChange?: (settings: any) => void;
-  selectedSites: string[];
-  projectSiteUrl?: string;
-  getCurrentPageUrl?: () => string;
-  pageConfig?: Record<string, boolean>;
-}
+import { IInvoiceTrackerProps } from "./IInvoiceTrackerProps";
+// export interface IInvoiceTrackerProps {
+//   description: string;
+//   isDarkTheme: boolean;
+//   environmentMessage: string;
+//   hasTeamsContext: boolean;
+//   context: any;
+//   userDisplayName: string;
+//   onConfigChange?: (settings: any) => void;
+//   selectedSites: string[];
+//   projectSiteUrl?: string;
+//   getCurrentPageUrl?: () => string;
+//   pageConfig?: Record<string, boolean>;
+//   effectiveUserLogin?: string;
+// }
 export const InvoiceTrackerContext: any = React.createContext(React.useContext);
 interface IInvoiceTrackerState {
   loading: boolean;
@@ -44,6 +46,7 @@ interface IInvoiceTrackerState {
   isNavCollapsed: boolean;
   pageConfig: Record<string, boolean>;
   userPhotoUrl?: string;
+  effectiveUserDisplayName?: string;
 }
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
@@ -213,9 +216,17 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     this.setState({ navLinks, loading: false, progress: 100 });
 
     try {
-      const email = this.props.context.pageContext.user.email;
-      const photoUrl = `${this.props.context.pageContext.web.absoluteUrl}/_layouts/15/userphoto.aspx?size=M&accountname=${encodeURIComponent(email)}`;
-      this.setState({ userPhotoUrl: photoUrl });
+      // const email = this.props.context.pageContext.user.email;
+      // const photoUrl = `${this.props.context.pageContext.web.absoluteUrl}/_layouts/15/userphoto.aspx?size=M&accountname=${encodeURIComponent(email)}`;
+      // this.setState({ userPhotoUrl: photoUrl });
+      const login = this.getEffectiveLogin();
+      const user = await this.sp.web.ensureUser(login);
+      const photoUrl = `${this.props.context.pageContext.web.absoluteUrl}/_layouts/15/userphoto.aspx?size=M&accountname=${encodeURIComponent(user.Email || login)}`;
+
+      this.setState({
+        effectiveUserDisplayName: user.Title,
+        userPhotoUrl: photoUrl
+      });
     } catch (e) {
       console.warn("Failed to load user profile photo", e);
       this.setState({ userPhotoUrl: undefined });
@@ -271,10 +282,15 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     // Optionally, persist config to SharePoint here.
   };
 
+  private getEffectiveLogin(): string {
+    return this.props.effectiveUserLogin || this.props.context.pageContext.user.loginName;
+  }
 
   private async getUserRoles(): Promise<string[]> {
     try {
-      const groups = await this.sp.web.currentUser.groups();
+      const login = this.getEffectiveLogin();
+      const user = await this.sp.web.ensureUser(login);
+      const groups = await this.sp.web.siteUsers.getById(user.Id).groups();
       return groups.map(g => g.Title);
     } catch {
       return ["User"];
@@ -282,7 +298,9 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
   }
   private async fetchUserGroups() {
     try {
-      const groups = await this.sp.web.currentUser.groups();
+      const login = this.getEffectiveLogin();
+      const user = await this.sp.web.ensureUser(login);
+      const groups = await this.sp.web.siteUsers.getById(user.Id).groups();
       // Filter out groups whose titles end with Members, Owners, or Visitors
       const filteredGroupTitles = groups
         .map(g => g.Title)
@@ -368,8 +386,17 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
 
         await list.fields.addNumber("POAmount");
         await list.fields.addText("CurrentStatus", { MaxLength: 255 });
-        await list.fields.addText("Currency")
-        await list.fields.addDateTime("DueDate")
+        await list.fields.addText("Currency");
+        await list.fields.addDateTime("DueDate");
+        await list.fields.addDateTime("InvoiceRaised Date");
+        await list.fields.addDateTime("PaymentCompleted Date");
+        await list.fields.addDateTime("RequestCreatedDate");
+        await list.fields.addUser("RequestedCreatedBy", {
+          Description: "User who created the invoice request",
+          SelectionMode: 0,
+          Required: false,
+        });
+
         await list.fields.getByInternalNameOrTitle("Title").update({ Title: "Title", Required: false, Hidden: true });
       }
     }
@@ -521,7 +548,14 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
       } catch (error: any) {
         if (error && error.status === 404) {
           // Group does not exist, create
-          await this.sp.web.siteGroups.add({ Title: groupName, Description: `Members of the ${groupName} group.` });
+          const added = await this.sp.web.siteGroups.add({ Title: groupName, Description: `Members of the ${groupName} group.` });
+          const createdGroup = added.Title;
+          const currentUser = await this.sp.web.currentUser();
+          await this.sp.web.siteGroups
+            .getById(added.Id)
+            .users.add(currentUser.LoginName);
+
+          console.log(`Created group '${createdGroup}' and added ${currentUser.Title} as member`);
         }
       }
     }
@@ -762,7 +796,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
           </div>
           {!this.state.isNavCollapsed && (
             <div className={styles.sidebarFooter}>
-              <Persona text={this.props.userDisplayName} size={PersonaSize.size24} imageUrl={this.state.userPhotoUrl} />
+              <Persona text={this.state.effectiveUserDisplayName || this.props.userDisplayName} size={PersonaSize.size24} imageUrl={this.state.userPhotoUrl} />
               {/* <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
                 {`(${this.state.userGroups.join(", ")})`}
               </div> */}

@@ -1,3 +1,5 @@
+import { IColumn } from '@fluentui/react';
+
 export interface ICommonTableProps {
     tableContent: any;
     mainColumns: any;
@@ -11,5 +13,12 @@ export interface ICommonTableProps {
     selection?: any;
     columns?: any[];
     setKey?: string;
-    
+    onDataFilter?(items: any[]): void;
+    onRenderItemColumn?: (item?: any, index?: number, column?: IColumn) => React.ReactNode;
+    onItemInvoked?: (item?: any, index?: number, ev?: Event) => void;
+    groups?: any;
+    _onRenderGroupFooter?: any;
+    RemoveSelection?: boolean;
+    onColumnsChange?(selectedColumns: any[]): void;
+    localStorageKey?: string;
 }

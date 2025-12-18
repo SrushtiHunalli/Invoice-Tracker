@@ -24,7 +24,7 @@ interface IManageMembersProps {
 }
 
 interface IUserPersona extends IPersonaProps {
-  key: string;   // User email or LoginName
+    key: string;   // User email or LoginName
 }
 interface IManageMembersState {
     groups: any[];
@@ -61,17 +61,22 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
 
     async loadGroupsAndMembers() {
         this.setState({ isLoading: true });
+        const previousSelected = this.state.selectedGroup;
         const groups = await this.sp.web.siteGroups();
         const groupMembers: { [groupName: string]: any[] } = {};
         for (const group of groups) {
             const users = await this.sp.web.siteGroups.getById(group.Id).users();
             groupMembers[group.Title] = users;
         }
+        let newSelectedGroup = previousSelected;
+        if (!newSelectedGroup || !groups.some(g => g.Title === newSelectedGroup)) {
+            newSelectedGroup = groups.length ? groups[0].Title : "";
+        }
         this.setState({
             groups,
             groupMembers,
             isLoading: false,
-            selectedGroup: groups.length ? groups[0].Title : "",
+            selectedGroup: newSelectedGroup,
             selectedUsersToAdd: [],
         });
     }
@@ -89,20 +94,59 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
 
     onAddUsers = async () => {
         const { selectedUsersToAdd, selectedGroup } = this.state;
+
         for (const user of selectedUsersToAdd) {
             const emailOrLogin = user.key as string;
-            if (emailOrLogin && emailOrLogin.length > 0 && emailOrLogin.length <= 251) {
-                // Use ensureUser to resolve email/login to user in SharePoint, then add
+            if (!emailOrLogin || emailOrLogin.length > 251) continue;
+
+            try {
+                // 1. Ensure the user exists
                 const spUser = await this.sp.web.ensureUser(emailOrLogin);
-                await this.sp.web.siteGroups.getByName(selectedGroup).users.add(spUser.LoginName);
-            } else {
-                console.warn("Invalid identifier for user, skipping add:", user);
+                console.log(`Ensured user: ${spUser.LoginName}`);
+
+                // 2. Get associated member group
+                const memberGroup = await this.sp.web.associatedMemberGroup();
+
+                // ---- CHECK IF USER ALREADY IN MEMBER GROUP ----
+                const memberGroupUsers = await this.sp.web.siteGroups
+                    .getById(memberGroup.Id)
+                    .users();
+
+                const alreadyInMember = memberGroupUsers.some(u => u.Id === spUser.Id);
+
+                if (!alreadyInMember) {
+                    await this.sp.web.siteGroups
+                        .getById(memberGroup.Id)
+                        .users.add(spUser.LoginName);
+                    console.log(`Added ${spUser.LoginName} to site Members group`);
+                } else {
+                    console.log(`${spUser.LoginName} already in Members group — skipping`);
+                }
+
+                // 3. Business Role group (PM/DM/DH/etc.)
+                const roleGroupUsers = await this.sp.web.siteGroups
+                    .getByName(selectedGroup)
+                    .users();
+
+                const alreadyInRoleGroup = roleGroupUsers.some(u => u.Id === spUser.Id);
+
+                if (!alreadyInRoleGroup) {
+                    await this.sp.web.siteGroups
+                        .getByName(selectedGroup)
+                        .users.add(spUser.LoginName);
+                    console.log(`Added ${spUser.LoginName} to ${selectedGroup}`);
+                } else {
+                    console.log(`${spUser.LoginName} already in ${selectedGroup} — skipping`);
+                }
+
+            } catch (error) {
+                console.error(`FAILED adding ${emailOrLogin}:`, error);
             }
         }
+
         this.setState({ selectedUsersToAdd: [] });
         await this.loadGroupsAndMembers();
     };
-
 
     onRemoveUser = async (user: any) => {
         const { selectedGroup } = this.state;
@@ -126,7 +170,7 @@ export class ManageMembers extends React.Component<IManageMembersProps, IManageM
                 key: user.Email || user.LoginName,  // Prefer Email, fallback to LoginName
                 text: user.Title,
                 secondaryText: user.Email || user.LoginName
-            })as IUserPersona);
+            }) as IUserPersona);
 
 
     }

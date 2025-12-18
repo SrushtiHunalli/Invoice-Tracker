@@ -56,16 +56,15 @@
 }
 
 .detailsList_Scrollablepane_Container {
-  height: 400px;
+  height: 100%;
+  // position: static !important;
   /* fixed value, NOT 100% */
-  // overflow-y: auto;
+  overflow: auto;
 }
 
 .detailsListContainer {
   flex: 1 1 auto;
   min-height: 0;
-  /* important to allow shrinking within flex */
-  // overflow-y: auto; /* scroll only the list area */
   height: 300px;
 }
 

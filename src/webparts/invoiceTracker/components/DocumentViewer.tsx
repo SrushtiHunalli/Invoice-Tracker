@@ -21,7 +21,7 @@ interface DocumentViewerProps {
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ url, isOpen, onDismiss, fileName }) => {
   const fileType = getFileType(fileName);
-
+  const [officePreviewUrl, setOfficePreviewUrl] = useState<string | null>(null);
   const [excelHtml, setExcelHtml] = useState<string | null>(null);
   const [emlHtml, setEmlHtml] = useState<string | null>(null);
   const [msgHtml, setMsgHtml] = useState<string | null>(null);
@@ -46,6 +46,17 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ url, isOpen, onDismiss,
       }
     };
     fetchAndParseExcel();
+  }, [url, fileType]);
+
+  //Office parsing effect
+  useEffect(() => {
+    if (fileType === "office" && url) {
+      const serverRelativeUrl = url.replace(new RegExp(`^${window.location.origin}`), '');
+      const previewUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(serverRelativeUrl)}`;
+      setOfficePreviewUrl(previewUrl);
+    } else {
+      setOfficePreviewUrl(null);
+    }
   }, [url, fileType]);
 
   // EML parsing effect
@@ -150,6 +161,19 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ url, isOpen, onDismiss,
           />
         ) : (
           <Spinner label="Loading Excel..." />
+        );
+      case "office":
+        if (!officePreviewUrl) {
+          return <Spinner label="Preparing Office preview..." />;
+        }
+        return (
+          <iframe
+            src={officePreviewUrl}
+            width="100%"
+            height="1000px"
+            style={{ border: "none", minHeight: "600px" }}
+            title={`${fileName} Preview`}
+          />
         );
       case "eml":
         return emlHtml ? (

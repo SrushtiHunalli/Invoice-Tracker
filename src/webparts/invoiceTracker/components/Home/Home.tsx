@@ -168,7 +168,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
         setAllRequests(requests);
 
         setCounts({
-          pending: requests.filter(r => r.FinanceStatus === "Pending").length,
+          pending: requests.filter(r => r.Status === "Invoice Requested").length,
           paymentPending: requests.filter((r) => r.Status === "Pending Payment").length,
           clarification: requests.filter(
             r => r.CurrentStatus === "Finance asked Clarification"
@@ -212,7 +212,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
 
   function onCardClick(filterKey: keyof typeof counts) {
     const filterMap = {
-      pending: { FinanceStatus: "Pending" },
+      pending: { Status: "Invoice Requested" },
       paymentPending: { Status: "Pending Payment" },
       clarification: { CurrentStatus: "Finance asked Clarification" },
       paymentReceived: { Status: "Payment Received" },

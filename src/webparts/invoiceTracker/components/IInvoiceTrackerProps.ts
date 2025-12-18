@@ -13,8 +13,9 @@ export interface IInvoiceTrackerProps {
   projectSiteUrl?: string;
   getCurrentPageUrl?: () => string;
   pageConfig?: Record<string, boolean>;
+  effectiveUserLogin?: string;
+  onConfigChange?: (settings: any) => void;
 }
-
 
 
 

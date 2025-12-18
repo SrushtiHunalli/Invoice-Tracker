@@ -31,9 +31,11 @@
 }
 
 .detailsList_Scrollablepane_Container {
-  height: 400px; /* fixed value, NOT 100% */
+  height: 300px;
+  /* fixed value, NOT 100% */
   // overflow-y: auto;
 }
+
 // .detailsListContainer {
 //   flex: 1 1 auto;
 //   min-height: 0; /* important to allow shrinking within flex */
@@ -44,17 +46,40 @@
 .rootContainer {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Or 100% if contained within a parent with explicit height */
+  height: 100vh;
+  /* Or 100% if contained within a parent with explicit height */
 }
 
 .filterAndHeaderSection {
   flex: 0 0 auto;
-  z-index: 1; /* This helps for 'sticky' if needed */
-  background: #fff; /* Optional: ensures overlap is clear */
+  z-index: 1;
+  /* This helps for 'sticky' if needed */
+  background: #fff;
+  /* Optional: ensures overlap is clear */
 }
 
 .detailsListContainer {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  min-height: 100;
+  // overflow-y: auto;
+}
+
+.myRequestsRoot {
+  display: flex;
+  flex-direction: column;
+  height: 400px; // fills webpart height
+}
+
+.toolbarArea {
+  flex: 0 0 auto; // natural height for filters etc.
+}
+
+.listHost {
+  flex: 1 1 auto; // takes remaining height
+  min-height: 0; // critical so flex item can shrink
+  overflow: hidden; // ScrollablePane will manage its own scroll
+}
+
+.listHost :global(.ms-ScrollablePane) {
+  height: 400px; // make ScrollablePane fill listHost
 }

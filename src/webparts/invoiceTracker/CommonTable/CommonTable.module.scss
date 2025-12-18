@@ -2,8 +2,18 @@
   max-width: 100% !important;
 }
 
+.commonTable :global(.ms-Grid-col) {
+  height: auto;
+  /* instead of 100% or flex-grow */
+  // max-height: 400px;
+  /* adjust as needed */
+  overflow-y: auto;
+  /* allow scroll inside this region */
+}
+
 .tableContainer {
-  max-height: 60vh; /* adjust as needed */
+  // max-height: 400px; /* adjust as needed */
+  height: auto;
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -13,18 +23,19 @@
   scroll-behavior: smooth;
 }
 
-.commonTable{
-    .btnStyle{
-        text-align: right;
-    }
+.commonTable {
+  .btnStyle {
+    text-align: right;
+  }
 
-    .emptyList{
-        text-align: center;
-        font-weight: bold;
-        font-size: medium;
-    }
+  .emptyList {
+    text-align: center;
+    font-weight: bold;
+    font-size: medium;
+  }
 
-    .topSpace{
-        margin-top: 1%;;
-    }
+  .topSpace {
+    margin-top: 1%;
+    ;
+  }
 }
