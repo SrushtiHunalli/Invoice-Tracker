@@ -10,7 +10,7 @@ interface HomeProps {
   sp: SPFI;
   context: any;
   onNavigate: (pageKey: string, filter?: any) => void;
-  primaryColor?: string; // pass or derive from theme for webpart color
+  primaryColor?: string;
 }
 
 function DashboardCard({
@@ -19,10 +19,10 @@ function DashboardCard({
   ariaLabel,
   onClick,
   iconName,
-
   cardWidth,
   cardHeight,
-  cardPadding
+  cardPadding,
+  color = primaryColor
 }: {
   label: string;
   count: number;
@@ -32,6 +32,7 @@ function DashboardCard({
   cardWidth: number | string;
   cardHeight: number | string;
   cardPadding: number | string;
+  color?: string;
 }) {
   return (
     <div
@@ -46,95 +47,120 @@ function DashboardCard({
         minWidth: cardWidth,
         height: cardHeight,
         background: "#fff",
-        borderRadius: 14,
-        boxShadow: "0 2px 15px rgba(0,30,60,0.06)",
+        borderRadius: 16,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
         padding: cardPadding,
         margin: "auto",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
-        transition: "box-shadow .15s, transform .14s",
+        transition: "all .2s cubic-bezier(0.4, 0, 0.2, 1)",
         outline: 0,
-        border: "1.5px solid #eee",
+        border: "2px solid transparent",
         cursor: "pointer",
         position: "relative",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 32px ${primaryColor}22`;
-        (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+        const target = e.currentTarget as HTMLElement;
+        target.style.boxShadow = `0 8px 32px ${color}20`;
+        target.style.transform = "translateY(-4px)";
+        target.style.borderColor = color;
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 15px rgba(0,30,60,0.06)";
-        (e.currentTarget as HTMLElement).style.transform = "none";
+        const target = e.currentTarget as HTMLElement;
+        target.style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)";
+        target.style.transform = "translateY(0)";
+        target.style.borderColor = "transparent";
       }}
     >
-      <Icon iconName={iconName} styles={{ root: { fontSize: 36, color: primaryColor, marginBottom: 8 } }} />
-      <div style={{ fontSize: 19, fontWeight: 600, color: "#222", marginBottom: 2, textAlign: "center" }}>
+      <div style={{
+        width: 40, height: 40,  // ✅ SMALLER ICON CONTAINER
+        background: `${color}12`,
+        borderRadius: 10,  // ✅ SMALLER RADIUS
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: 8  // ✅ TIGHTER SPACING
+      }}>
+        <Icon iconName={iconName} styles={{
+          root: { fontSize: 20, color, fontWeight: "bold" }  // ✅ SMALLER ICON
+        }} />
+      </div>
+      <div style={{
+        fontSize: 12, fontWeight: 600,  // ✅ SMALLER TEXT
+        color: "#555", marginBottom: 2,  // ✅ TIGHTER SPACING
+        textAlign: "center",
+        letterSpacing: 0.3
+      }}>
         {label}
       </div>
-      <div style={{ fontSize: 32, fontWeight: 700, color: primaryColor, margin: "6px 0 4px" }}>
+      <div style={{
+        fontSize: 24, fontWeight: 800,  // ✅ SLIGHTLY SMALLER NUMBER
+        color, margin: "2px 0 8px",  // ✅ TIGHTER SPACING
+        fontFeatureSettings: "'zero' 1"
+      }}>
         {count}
       </div>
-      <div
-        style={{
-          fontSize: 15,
-          color: "#444",
-          fontWeight: 500,
-          borderTop: "1px solid #e6e6e6",
-          paddingTop: 9,
-          marginTop: "auto",
-          width: "90%",
-          textAlign: "center"
-        }}
-      >
-        View <span style={{ marginLeft: 10, fontSize: 18, fontWeight: 700 }}>→</span>
+      <div style={{
+        fontSize: 11,  // ✅ SMALLER FOOTER TEXT
+        color: "#888",
+        fontWeight: 500,
+        borderTop: "1px solid #f0f0f0",
+        paddingTop: 8,  // ✅ TIGHTER PADDING
+        marginTop: "auto",
+        width: "90%",
+        textAlign: "center",
+      }}>
+        View <span style={{
+          marginLeft: 4,  // ✅ TIGHTER SPACING
+          fontSize: 14,  // ✅ SMALLER ARROW
+          fontWeight: 700,
+          color
+        }}>→</span>
       </div>
     </div>
   );
 }
+
 const spTheme = (window as any).__themeState__?.theme;
 const primaryColor = spTheme?.themePrimary || "#0078d4";
+
 export default function Home({ sp, context, onNavigate }: HomeProps) {
-  // const theme = getTheme();
   const spTheme = (window as any).__themeState__?.theme;
   const primaryColor = spTheme?.themePrimary || "#0078d4";
-  // const neutralColor = spTheme?.neutralPrimary || "#444";
-
-  // const accentColor = primaryColor || theme.palette.themePrimary || "#2564cf";
 
   const [, setAllRequests] = useState<any[]>([]);
-  const [counts, setCounts] = useState({ pending: 0, paymentPending: 0, clarification: 0, paymentReceived: 0 });
+  const [counts, setCounts] = useState({ pending: 0, paymentPending: 0, clarification: 0, paymentReceived: 0, overdue: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userGroups, setUserGroups] = useState<string[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [isAccessDeniedDialogVisible, setIsAccessDeniedDialogVisible] = React.useState(false);
-  // Responsive card size states
-  const [cardWidth, setCardWidth] = useState<number | string>(150);
-  const [cardHeight, setCardHeight] = useState<number | string>(152);
-  const [cardPadding, setCardPadding] = useState<number | string>(24);
+
+  // ✅ COMPACT RESPONSIVE SIZES
+  const [cardWidth, setCardWidth] = useState<number | string>(120);  // ✅ SMALLER
+  const [cardHeight, setCardHeight] = useState<number | string>(110);  // ✅ SMALLER
+  const [cardPadding, setCardPadding] = useState<number | string>(16);  // ✅ SMALLER
 
   // Adjust card size based on window width for responsiveness
   useEffect(() => {
     function handleResize() {
       const width = window.innerWidth;
       if (width <= 500) {
-        setCardWidth(100);
-        setCardHeight(85);
-        setCardPadding(8);
+        setCardWidth(100);      // ✅ EXTRA SMALL MOBILE
+        setCardHeight(92);      // ✅ EXTRA SMALL MOBILE
+        setCardPadding(12);     // ✅ EXTRA SMALL MOBILE
       } else if (width <= 750) {
-        setCardWidth(150);
-        setCardHeight(120);
-        setCardPadding(14);
+        setCardWidth(120);      // ✅ SMALL TABLET
+        setCardHeight(100);     // ✅ SMALL TABLET
+        setCardPadding(14);     // ✅ SMALL TABLET
       } else {
-        setCardWidth(150);
-        setCardHeight(152);
-        setCardPadding(24);
+        setCardWidth(120);      // ✅ COMPACT DESKTOP
+        setCardHeight(110);     // ✅ COMPACT DESKTOP
+        setCardPadding(16);     // ✅ COMPACT DESKTOP
       }
     }
 
-    handleResize(); // initial
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -162,11 +188,12 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
         const spCurrent = spfi().using(SPFx(context));
         const requests = await spCurrent.web.lists
           .getByTitle("Invoice Requests")
-          .items.select("Id", "Status", "CurrentStatus", "FinanceStatus")
+          .items.select("Id", "Status", "CurrentStatus", "FinanceStatus", "DueDate")
           .top(5000)();
 
         setAllRequests(requests);
-
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         setCounts({
           pending: requests.filter(r => r.Status === "Invoice Requested").length,
           paymentPending: requests.filter((r) => r.Status === "Pending Payment").length,
@@ -174,10 +201,14 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
             r => r.CurrentStatus === "Finance asked Clarification"
           ).length,
           paymentReceived: requests.filter((r) => r.Status === "Payment Received").length,
+          overdue: requests.filter(r =>
+            r.Status === "Overdue"
+          ).length,
+          cancelled: requests.filter((r) => r.Status === "Cancelled").length,
         });
       } catch {
         setError("Failed to load invoice requests");
-        setCounts({ pending: 0, paymentPending: 0, clarification: 0, paymentReceived: 0 });
+        setCounts({ pending: 0, paymentPending: 0, clarification: 0, paymentReceived: 0, overdue: 0, cancelled: 0 });
       } finally {
         setLoading(false);
       }
@@ -216,10 +247,12 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
       paymentPending: { Status: "Pending Payment" },
       clarification: { CurrentStatus: "Finance asked Clarification" },
       paymentReceived: { Status: "Payment Received" },
+      overdue: { Status: "Overdue" },
+      cancelled: { Status: "Cancelled" },
     };
     if (showAll || showPmOnly) onNavigate("myrequests", { initialFilters: filterMap[filterKey] });
     else if (showFinanceOnly) onNavigate("updaterequests", { initialFilters: filterMap[filterKey] });
-    setIsAccessDeniedDialogVisible(true);
+    else setIsAccessDeniedDialogVisible(true);
   }
 
   return (
@@ -227,22 +260,23 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
       style={{
         width: "100%",
         height: "100%",
-        background: "linear-gradient(120deg,#f6f8fa 80%,#eaf2fc 100%)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
       }}
     >
-      {/* Responsive max-width grid, always centered */}
+      {/* ✅ TIGHTER GRID SPACING */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: window.innerWidth <= 500 ? "1fr" : `repeat(auto-fit, minmax(${cardWidth}px, 1fr))`,
-          gap: 30,
+          gridTemplateColumns: window.innerWidth <= 500
+            ? "repeat(auto-fit, minmax(140px, 1fr))"
+            : `repeat(auto-fit, minmax(20px, 1fr))`,
+          gap: window.innerWidth <= 500 ? 12 : 16,  // ✅ TIGHTER GAP
           justifyContent: "center",
           width: "100%",
-          maxWidth: 1110,
-          margin: "56px 0 0",
+          maxWidth: 1300,
+          margin: "32px auto",  // ✅ LESS TOP MARGIN
         }}
       >
         {(showAll || showPmOnly || showFinanceOnly) && (
@@ -253,18 +287,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
               ariaLabel={`Pending Requests: ${counts.pending}`}
               onClick={() => onCardClick("pending")}
               iconName="Edit"
-              // accentColor={accentColor}
-              cardWidth={cardWidth}
-              cardHeight={cardHeight}
-              cardPadding={cardPadding}
-            />
-            <DashboardCard
-              label="Pending Payment"
-              count={counts.paymentPending}
-              ariaLabel={`Pending Payment: ${counts.paymentPending}`}
-              onClick={() => onCardClick("paymentPending")}
-              iconName="Clock"
-              // accentColor={accentColor}
+              color="#0681e6ff"
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -275,7 +298,60 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
               ariaLabel={`Clarification Requests: ${counts.clarification}`}
               onClick={() => onCardClick("clarification")}
               iconName="WarningSolid"
-              // accentColor={accentColor}
+              color="#ffb900"
+              cardWidth={cardWidth}
+              cardHeight={cardHeight}
+              cardPadding={cardPadding}
+            />
+            <DashboardCard
+              label="Pending Payment"
+              count={counts.paymentPending}
+              ariaLabel={`Pending Payment: ${counts.paymentPending}`}
+              onClick={() => onCardClick("paymentPending")}
+              iconName="Clock"
+              color="#ff8c00"
+              cardWidth={cardWidth}
+              cardHeight={cardHeight}
+              cardPadding={cardPadding}
+            />
+          </>
+        )}
+      </div>
+
+      {/* ✅ TIGHTER SECOND GRID SPACING */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: window.innerWidth <= 500
+            ? "repeat(auto-fit, minmax(140px, 1fr))"
+            : `repeat(auto-fit, minmax(20px, 1fr))`,
+          gap: window.innerWidth <= 500 ? 12 : 16,  // ✅ TIGHTER GAP
+          justifyContent: "center",
+          width: "100%",
+          maxWidth: 1300,
+          margin: "24px auto",  // ✅ LESS MARGIN
+        }}
+      >
+        {(showAll || showPmOnly || showFinanceOnly) && (
+          <>
+            <DashboardCard
+              label="Overdue"
+              count={counts.overdue}
+              ariaLabel={`Overdue Requests: ${counts.overdue}`}
+              onClick={() => onCardClick("overdue")}
+              iconName="ClockSolid"
+              color="#808080"
+              cardWidth={cardWidth}
+              cardHeight={cardHeight}
+              cardPadding={cardPadding}
+            />
+            <DashboardCard
+              label="Cancelled"
+              count={counts.cancelled}
+              ariaLabel={`Cancelled Requests: ${counts.cancelled}`}
+              onClick={() => onCardClick("cancelled")}
+              iconName="Cancel"
+              color="#d13438"
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
@@ -286,13 +362,14 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
               ariaLabel={`Payment Received: ${counts.paymentReceived}`}
               onClick={() => onCardClick("paymentReceived")}
               iconName="CheckMark"
-              // accentColor={accentColor}
+              color="#107c10"
               cardWidth={cardWidth}
               cardHeight={cardHeight}
               cardPadding={cardPadding}
             />
           </>
         )}
+
         <Dialog
           hidden={!isAccessDeniedDialogVisible}
           onDismiss={() => setIsAccessDeniedDialogVisible(false)}
@@ -310,6 +387,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
           </DialogFooter>
         </Dialog>
       </div>
+
       {(showAll || showPmOnly) && (
         <div
           role="button"
@@ -319,7 +397,7 @@ export default function Home({ sp, context, onNavigate }: HomeProps) {
             if (e.key === "Enter" || e.key === " ") onNavigate("Createview");
           }}
           style={{
-            margin: "54px auto 0",
+            margin: "40px auto 0",  // ✅ LESS BOTTOM MARGIN
             cursor: "pointer",
             background: primaryColor,
             borderRadius: 32,

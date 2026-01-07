@@ -142,19 +142,19 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     });
 
 
-    const canvas = document.querySelector('.CanvasSection');
-    if (canvas && canvas.parentElement) {
-      canvas.parentElement.style.width = "100%";
-      canvas.parentElement.style.minWidth = "100%";
-      canvas.parentElement.style.maxWidth = "100%";
-      canvas.parentElement.style.position = "fixed";
-      canvas.parentElement.style.top = "0"
-      canvas.parentElement.style.left = "0";
-      canvas.parentElement.style.height = "100%";
-      canvas.parentElement.style.zIndex = "1000";
-      canvas.parentElement.style.margin = "0";
-      canvas.parentElement.style.background = "#fff";
-    }
+    // const canvas = document.querySelector('.CanvasSection');
+    // if (canvas && canvas.parentElement) {
+    //   canvas.parentElement.style.width = "100%";
+    //   canvas.parentElement.style.minWidth = "100%";
+    //   canvas.parentElement.style.maxWidth = "100%";
+    //   canvas.parentElement.style.position = "fixed";
+    //   canvas.parentElement.style.top = "0"
+    //   canvas.parentElement.style.left = "0";
+    //   canvas.parentElement.style.height = "100%";
+    //   canvas.parentElement.style.zIndex = "1000";
+    //   canvas.parentElement.style.margin = "0";
+    //   canvas.parentElement.style.background = "#fff";
+    // }
 
     this.setState({ loading: true, progress: 10 });
     const roles = await this.getUserRoles();
@@ -199,9 +199,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     this.setState({ navLinks, loading: false, progress: 100 });
     this.updateProgress();
     await this.ensureGroups();
-
-    await this.ensureInvoiceConfigList();
-    this.updateProgress();
 
     await this.ensureLists();
     await this.ensureInvoicePOList();
@@ -326,38 +323,6 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     }
   };
 
-  private async ensureInvoiceConfigList() {
-    try {
-      await this.sp.web.lists.getByTitle("InvoiceConfiguration").select("Id")();
-    } catch (error: any) {
-      if (error.status === 404) {
-        const added = await this.sp.web.lists.add("InvoiceConfiguration", "Configuration for Invoice Tracker", 100);
-        const list = this.sp.web.lists.getById(added.Id)
-        await list.fields.addMultilineText("Value");
-      }
-    }
-    // const value = { "hideCommandBar": true, "hideSideAppBar": true, "hidePageTitle": true, "hideSiteHeader": true, "hideCommentsWrapper": true, "hideO365BrandNavbar": true, "hideSharepointHubNavbar": true }
-    const valueObj = {
-      hideCommandBar: true,
-      hideSideAppBar: true,
-      hidePageTitle: true,
-      hideSiteHeader: true,
-      hideCommentsWrapper: true,
-      hideO365BrandNavbar: true,
-      hideSharepointHubNavbar: true
-    };
-
-    const valueString = JSON.stringify(valueObj);
-    await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
-      Title: "PageConfig",
-      Value: valueString,
-    })
-    await this.sp.web.lists.getByTitle("InvoiceConfiguration").items.add({
-      Title: "FinanceEmail",
-      Value: "",
-    })
-  }
-
   private async ensureLists() {
     try {
       await this.sp.web.lists.getByTitle("Invoice Requests").select("Id")();
@@ -383,6 +348,7 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
         await list.fields.addText("FinanceStatus", { MaxLength: 255 });
         await list.fields.addMultilineText("PMCommentsHistory");
         await list.fields.addMultilineText("FinanceCommentsHistory");
+        await list.fields.addMultilineText("StatusHistory");
 
         await list.fields.addNumber("POAmount");
         await list.fields.addText("CurrentStatus", { MaxLength: 255 });

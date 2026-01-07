@@ -111,14 +111,8 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
   );
   const [isDialogVisible, setIsDialogVisible] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
-
-  // const [settings, setSettings] = useState<Record<string, boolean> | null>(null);
+  const [pageConfigItemId, setPageConfigItemId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  // React.useEffect(() => {
-  //   if (pageConfig) {
-  //     setSettings(prev => ({ ...prev, ...pageConfig }));
-  //   }
-  // }, [pageConfig]);
 
   // Load page settings from InvoiceConfiguration list
   useEffect(() => {
@@ -129,28 +123,24 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
     }
     async function loadPageSettings() {
       try {
-        const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
-        if (items.length > 0 && items[0].Value) {
-          const decoded = decodeHtmlEntities(items[0].Value);
-          const settingValues = JSON.parse(decoded);
-          setSettings(settingValues);
+        const items = await sp.web.lists
+          .getByTitle(SETTINGS_LIST)
+          .items
+          .select("Id", "Value")
+          .filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`)
+          .top(1)();
+
+        if (items.length > 0) {
+          setPageConfigItemId(items[0].Id);
+          setSettings(JSON.parse(decodeHtmlEntities(items[0].Value)));
         } else {
-          setSettings(
-            pageSettings.reduce((acc, item) => {
-              acc[item.stateVariable] = false;
-              return acc;
-            }, {} as Record<string, boolean>)
-          );
+          throw new Error("PageConfig missing");
         }
       } catch {
-        setSettings(
-          pageSettings.reduce((acc, item) => {
-            acc[item.stateVariable] = false;
-            return acc;
-          }, {} as Record<string, boolean>)
-        );
+        setError("Page configuration item not found");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     loadPageSettings();
   }, [sp]);
@@ -237,26 +227,35 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
 
   // On toggle change: update UI and save immediately
   const onToggleChange = async (key: string, checked?: boolean) => {
-    if (checked === undefined) return;
+    if (checked === undefined || pageConfigItemId === null) return;
     const updated = { ...settings, [key]: checked };
-    if (onConfigChange) {
-      onConfigChange(updated);
-    }
+    // if (onConfigChange) {
+    //   onConfigChange(updated);
+    // }
     setSettings(updated);
-    if (onSettingsUpdate) onSettingsUpdate(updated);
+    // if (onSettingsUpdate) onSettingsUpdate(updated);
     try {
-      setSavingConfig(true);
-      const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
-      const configValue = JSON.stringify(updated);
-      if (items.length === 0) {
-        await sp.web.lists.getByTitle(SETTINGS_LIST).items.add({ Title: PAGE_CONFIG_ITEM_TITLE, Value: configValue });
-      } else {
-        await sp.web.lists.getByTitle(SETTINGS_LIST).items.getById(items[0].Id).update({ Value: configValue });
-      }
-      setSavingConfig(false);
+      // setSavingConfig(true);
+      // const items = await sp.web.lists.getByTitle(SETTINGS_LIST).items.filter(`Title eq '${PAGE_CONFIG_ITEM_TITLE}'`).top(1)();
+      // const configValue = JSON.stringify(updated);
+      // if (items.length === 0) {
+      //   await sp.web.lists.getByTitle(SETTINGS_LIST).items.add({ Title: PAGE_CONFIG_ITEM_TITLE, Value: configValue });
+      // } else {
+      //   await sp.web.lists.getByTitle(SETTINGS_LIST).items.getById(items[0].Id).update({ Value: configValue });
+      // }
+      // setSavingConfig(false);
+      await sp.web.lists
+        .getByTitle(SETTINGS_LIST)
+        .items
+        .getById(pageConfigItemId)
+        .update({
+          Value: JSON.stringify(updated),
+        });
     } catch (e) {
       setSavingConfig(false);
       setError("Error saving settings");
+    } finally {
+      setSavingConfig(false);
     }
   };
 

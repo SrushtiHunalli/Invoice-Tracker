@@ -185,19 +185,25 @@ export default function BusinessView({
 
   // Panel columns for Invoice Requests table
   const invoiceColumns: IColumn[] = [
+    // {
+    //   key: "poitemtitle",
+    //   name: "PO Item Title",
+    //   fieldName: "POItem_x0020_Title",
+    //   minWidth: 140,
+    // },
+    // {
+    //   key: "poitemvalue",
+    //   name: "PO Item Value",
+    //   fieldName: "POItem_x0020_Value",
+    //   minWidth: 120,
+    //   onRender: (i) =>
+    //     getCurrencySymbol(i.Currency) + (i.POItem_x0020_Value?.toLocaleString() ?? ""),
+    // },
     {
-      key: "poitemtitle",
-      name: "PO Item Title",
-      fieldName: "POItem_x0020_Title",
-      minWidth: 140,
-    },
-    {
-      key: "poitemvalue",
-      name: "PO Item Value",
-      fieldName: "POItem_x0020_Value",
-      minWidth: 120,
-      onRender: (i) =>
-        getCurrencySymbol(i.Currency) + (i.POItem_x0020_Value?.toLocaleString() ?? ""),
+      key: "POID",
+      name: "Purchase Order",
+      fieldName: "PurchaseOrder",
+      minWidth: 110,
     },
     {
       key: "invoiceamount",
@@ -358,40 +364,6 @@ export default function BusinessView({
           allowedTeamsForUser = [];
         }
 
-        // const classified = allTCC.reduce((acc: any, row: any) => {
-        //   const title = row.Title;
-        //   if (!title) return acc;
-        //   if (row.Business === title) {
-        //     acc.business.add(title);
-        //   } else if (row.BusinessUnit === title) {
-        //     acc.businessUnit.add(title);
-        //   } else if (row.Department === title) {
-        //     acc.department.add(title);
-        //   } else {
-        //     acc.team.add(title);
-        //   }
-        //   return acc;
-        // }, { team: new Set<string>(), department: new Set<string>(), businessUnit: new Set<string>(), business: new Set<string>() });
-
-        // const filteredTeamSet = new Set<string>(
-        //   Array.from(classified.team).filter(team => allowedTeamsForUser.includes(team as string)) as string[]
-        // );
-        // const filteredDepartmentSet = new Set<string>(
-        //   Array.from(classified.department).filter(dept => allowedTeamsForUser.includes(dept as string)) as string[]
-        // );
-        // const filteredBusinessUnitSet = new Set<string>(
-        //   Array.from(classified.businessUnit).filter(bu => allowedTeamsForUser.includes(bu as string)) as string[]
-        // );
-        // const filteredBusinessSet = new Set<string>(
-        //   Array.from(classified.business).filter(biz => allowedTeamsForUser.includes(biz as string)) as string[]
-        // );
-
-        // setFilteredTeamSet(filteredTeamSet);
-        // setFilteredDepartmentSet(filteredDepartmentSet);
-        // setFilteredBusinessUnitSet(filteredBusinessUnitSet);
-        // setFilteredBusinessSet(filteredBusinessSet);
-        // console.log("Allowed Teams for User:", allowedTeamsForUser);
-        // setAllowedTeams(Array.from(new Set(allowedTeamsForUser)));
         const filteredTCCByAllowed = allTCC.filter(row => allowedTeamsForUser.includes(row.Title));
 
         const businessSet = new Set<string>();
@@ -506,8 +478,9 @@ export default function BusinessView({
         const paidPercent = totalPOValue > 0 ? (totalInvoiced / totalPOValue) * 100 : 0;
 
         const overdueCount = ReqData.filter(
-          (r) => r.Status && r.Status.toLowerCase() === "pending payment"
+          (r) => r.Status && r.Status.toLowerCase() === "overdue"
         ).length;
+
         const statusMap: { [status: string]: number } = {};
         ReqData.forEach((r) => {
           const k = r.Status || "Unknown";
@@ -551,28 +524,6 @@ export default function BusinessView({
       return allowedTeams.includes(team);
     });
   }, [projects, projectToTeamMap, allowedTeams]);
-
-  // const teamOptions: IDropdownOption[] = React.useMemo(() => {
-  //   if (!allowedTeams) return [];
-  //   return allowedTeams.map((team) => ({ key: team, text: team }));
-  // }, [allowedTeams]);
-
-  // Apply department filter to filtered projects
-  // const departmentFilteredProjects = React.useMemo(() => {
-  //   if (allowedTeams === null) return [];
-
-  //   let projs = filteredProjectsByTeam;
-
-  //   if (selectedDepartment && selectedDepartment !== "__all__") {
-  //     projs = projs.filter(p => p.Department === selectedDepartment);
-  //   }
-
-  //   if (selectedTeam && selectedTeam !== "__all__") {
-  //     projs = projs.filter(p => projectToTeamMap[p.Title] === selectedTeam);
-  //   }
-
-  //   return projs;
-  // }, [filteredProjectsByTeam, selectedDepartment, selectedTeam, projectToTeamMap, allowedTeams]);
 
   const departmentFilteredProjects = React.useMemo(() => {
     if (!allowedTeams) return;
@@ -650,14 +601,6 @@ export default function BusinessView({
     return poSummary.filter(po => poMatchesSearch(po, searchText));
   }, [poSummary, searchText]);
 
-  // const filteredPoSummary = React.useMemo(() => {
-  //   if (allowedTeams === null) return [];
-  //   return searchFilteredPoSummary.filter(po => {
-  //     const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
-  //     return !!matchingProject;
-  //   }).filter(po => !po.ParentPOID);
-  // }, [searchFilteredPoSummary, departmentFilteredProjects, allowedTeams]);
-
   const filteredPoSummary = React.useMemo(() => {
     console.log('Calculating filteredPoSummary memo');
 
@@ -669,15 +612,6 @@ export default function BusinessView({
     console.log('allowedTeams:', allowedTeams);
     console.log('searchFilteredPoSummary length before filtering:', searchFilteredPoSummary.length);
     console.log('departmentFilteredProjects length:', departmentFilteredProjects.length);
-
-    // const filteredByProject = searchFilteredPoSummary.filter(po => {
-    //   const matchingProject = departmentFilteredProjects.find(p => p.Title === po.ProjectName);
-    //   const isMatch = !!matchingProject;
-    //   if (!isMatch) {
-    //     console.log(`PO with ProjectName "${po.ProjectName}" has no matching project`);
-    //   }
-    //   return isMatch;
-    // });
 
     const filteredByProject = searchFilteredPoSummary.filter(po => {
       const matchingProject = departmentFilteredProjects.find(p => {
@@ -935,15 +869,6 @@ export default function BusinessView({
     <Stack tokens={{ childrenGap: 28 }} styles={{ root: { padding: 32, background: "#fafafa", minHeight: 600 } }}>
       <Separator />
       <Stack horizontal tokens={{ childrenGap: 24, padding: 0 }} styles={{ root: { marginBottom: 16 } }}>
-        {/* <div>
-          <Text styles={{ root: { marginBottom: 16 } }}>Search</Text>
-          <SearchBox
-            placeholder="Search"
-            value={searchText}
-            onChange={(_, newValue) => setSearchText(newValue ?? "")}
-            styles={{ root: { maxWidth: 300 } }}
-          />
-        </div> */}
         <div>
           <Label>Search</Label>
           <SearchBox
@@ -1298,13 +1223,13 @@ export default function BusinessView({
                 <div style={{ fontWeight: 600, color: primaryColor }}>Project Name:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.ProjectName ?? "-"}</div>
 
-                <div style={{ fontWeight: 600, color: primaryColor }}>PO Item Title:</div>
+                {/* <div style={{ fontWeight: 600, color: primaryColor }}>PO Item Title:</div>
                 <div>{invoiceRequestPanel.invoiceRequest.POItem_x0020_Title ?? "-"}</div>
                 <div style={{ fontWeight: 600, color: primaryColor }}>PO Item Value:</div>
                 <div>
                   {getCurrencySymbol(invoiceRequestPanel.invoiceRequest.Currency)}
                   {invoiceRequestPanel.invoiceRequest.POItem_x0020_Value?.toLocaleString() ?? "-"}
-                </div>
+                </div> */}
 
                 <div style={{ fontWeight: 600, color: primaryColor }}>Invoiced Amount:</div>
                 <div>

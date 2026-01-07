@@ -1,16 +1,8 @@
-/* eslint-disable react/self-closing-comp */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import * as React from "react";
 import { Spinner } from "@fluentui/react/lib/Spinner";
 import * as XLSX from "xlsx";
 import { useEffect, useState } from "react";
 const MsgReader = require('@kenjiuno/msgreader').default;
-// import EmailJS from 'emailjs-mime-parser';
-// const parser = new EmailJS.MimeParser();
-// console.log(parser);
-
 interface DocumentViewerProps {
   url: string;
   isOpen: boolean;
