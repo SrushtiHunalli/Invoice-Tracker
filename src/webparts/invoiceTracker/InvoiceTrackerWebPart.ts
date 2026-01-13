@@ -35,15 +35,9 @@ export default class InvoiceTrackerWebPart extends BaseClientSideWebPart<IInvoic
     const sp = spfi().using(SPFx(this.context));
 
     try {
-      // const ownerGroup = await sp.web.associatedOwnerGroup();
-      // const ownerUsers = await sp.web.siteGroups.getById(ownerGroup.Id).users();
-      // const me = await sp.web.currentUser();
-      // this._isOwner = ownerUsers.some(u => u.Id === me.Id);
       const site = await sp.site();
-      const groupId = site.GroupId;   // THIS is the M365 Group ID
-
+      const groupId = site.GroupId;
       const graphClient = await this.context.msGraphClientFactory.getClient("3");
-
       const owners = await graphClient
         .api(`/groups/${groupId}/owners`)
         .select("id,mail,userPrincipalName,displayName")

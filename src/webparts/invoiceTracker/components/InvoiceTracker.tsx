@@ -142,19 +142,19 @@ export default class InvoiceTracker extends React.Component<IInvoiceTrackerProps
     });
 
 
-    // const canvas = document.querySelector('.CanvasSection');
-    // if (canvas && canvas.parentElement) {
-    //   canvas.parentElement.style.width = "100%";
-    //   canvas.parentElement.style.minWidth = "100%";
-    //   canvas.parentElement.style.maxWidth = "100%";
-    //   canvas.parentElement.style.position = "fixed";
-    //   canvas.parentElement.style.top = "0"
-    //   canvas.parentElement.style.left = "0";
-    //   canvas.parentElement.style.height = "100%";
-    //   canvas.parentElement.style.zIndex = "1000";
-    //   canvas.parentElement.style.margin = "0";
-    //   canvas.parentElement.style.background = "#fff";
-    // }
+    const canvas = document.querySelector('.CanvasSection');
+    if (canvas && canvas.parentElement) {
+      canvas.parentElement.style.width = "100%";
+      canvas.parentElement.style.minWidth = "100%";
+      canvas.parentElement.style.maxWidth = "100%";
+      canvas.parentElement.style.position = "fixed";
+      canvas.parentElement.style.top = "0"
+      canvas.parentElement.style.left = "0";
+      canvas.parentElement.style.height = "100%";
+      canvas.parentElement.style.zIndex = "1000";
+      canvas.parentElement.style.margin = "0";
+      canvas.parentElement.style.background = "#fff";
+    }
 
     this.setState({ loading: true, progress: 10 });
     const roles = await this.getUserRoles();

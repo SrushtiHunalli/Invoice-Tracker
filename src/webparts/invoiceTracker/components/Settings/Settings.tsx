@@ -137,7 +137,8 @@ const Settings: React.FC<SettingsProps> = ({ sp, onSettingsUpdate, pageConfig, c
           throw new Error("PageConfig missing");
         }
       } catch {
-        setError("Page configuration item not found");
+        // setError("Page configuration item not found");
+        console.log("Page configuration item not found");
       } finally {
         setLoading(false);
       }
